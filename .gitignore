@@ -1,0 +1,6 @@
+.DS_Store
+node_modules/
+.paseo-agent-team/
+.paseo-agent-team.yaml
+# Previous installer manifest during migration
+.copilot-workflow.yaml

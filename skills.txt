@@ -1,0 +1,5 @@
+# General workflow skills: installed into the target project's .agents/skills/
+# independently of any collaboration tool.
+# (schema-level skills are declared in openspec/schemas/*/skills.txt)
+tech-doc
+eli5
