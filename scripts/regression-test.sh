@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Focused regressions for installer standalone installation and legacy upgrades.
+# Focused regressions for standalone installation, managed updates, and repair.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -144,21 +144,20 @@ CONFIG
   printf 'ok: OpenSpec reinitialization preserves existing language and context\n'
 }
 
-test_legacy_upgrade() {
-  local target="$TEST_ROOT/legacy-target"
+test_managed_rerun() {
+  local target="$TEST_ROOT/managed-target"
   mkdir -p "$target"
   git -C "$target" init -q
-  cat > "$target/AGENTS.md" <<'LEGACY'
+  cat > "$target/AGENTS.md" <<'MANAGED'
 User prefix.
-<!-- copilot-workflow:begin -->
-Old managed instructions.
-<!-- copilot-workflow:end -->
+<!-- paseo-agent-team:begin -->
+Outdated managed instructions.
+<!-- paseo-agent-team:end -->
 User suffix.
-LEGACY
-  printf 'template: copilot-workflow\n' > "$target/.copilot-workflow.yaml"
+MANAGED
   cat > "$target/.git/hooks/pre-commit" <<'HOOK'
 #!/usr/bin/env bash
-# copilot-workflow hook shim
+# paseo-agent-team hook shim
 exit 99
 HOOK
   cat > "$target/.git/hooks/pre-commit.backup.user" <<'HOOK'
@@ -173,14 +172,12 @@ HOOK
   [ "$(head -n 1 "$target/AGENTS.md")" = 'User prefix.' ] || fail "prefix changed"
   [ "$(tail -n 1 "$target/AGENTS.md")" = 'User suffix.' ] || fail "suffix changed"
   [ "$(grep -cF '<!-- paseo-agent-team:begin -->' "$target/AGENTS.md")" = 1 ] || fail "duplicate new blocks"
-  if grep -qF '<!-- copilot-workflow:begin -->' "$target/AGENTS.md"; then fail "legacy marker retained"; fi
-  [ ! -e "$target/.copilot-workflow.yaml" ] || fail "legacy manifest not migrated"
+  grep -q 'Solo by default' "$target/AGENTS.md" || fail "managed instructions not refreshed"
+  [ "$(find "$target/.git/hooks" -name 'pre-commit.backup.*' | wc -l | tr -d ' ')" = 1 ] || fail "managed hook was backed up"
   (cd "$target" && PASEO_AGENT_TEAM_SKIP_HOOKS=1 .git/hooks/pre-commit) > "$TEST_ROOT/output" 2>&1 || fail "upgraded hook failed"
   [ "$(cat "$target/user-hook.log")" = 'user-hook' ] || fail "user hook did not run exactly once"
-  (cd "$target" && COPILOT_WORKFLOW_SKIP_HOOKS=1 scripts/pre-commit.sh) > "$TEST_ROOT/output" 2>&1 || fail "legacy bypass alias failed"
-  (cd "$target" && PASEO_AGENT_TEAM_SKIP_HOOKS=0 COPILOT_WORKFLOW_SKIP_HOOKS=1 scripts/pre-commit.sh) > "$TEST_ROOT/output" 2>&1 || fail "legacy bypass failed when both variables were set"
-  grep -q 'skipping discipline checks' "$TEST_ROOT/output" || fail "legacy bypass was masked by the new variable"
-  printf 'ok: legacy markers, manifest, hook, and bypass migrate without recursion\n'
+  grep -q 'PASEO_AGENT_TEAM_SKIP_HOOKS=1, skipping discipline checks' "$TEST_ROOT/output" || fail "maintenance bypass not reported"
+  printf 'ok: managed reruns preserve user content and hooks without recursion\n'
 }
 
 test_bad_markers() {
@@ -190,9 +187,11 @@ test_bad_markers() {
   cp "$target/AGENTS.md" "$TEST_ROOT/bad-original"
   if (cd "$target" && "$REPO_ROOT/init.sh" --with adr) > "$TEST_ROOT/output" 2>&1; then fail "reversed markers accepted"; fi
   cmp "$target/AGENTS.md" "$TEST_ROOT/bad-original" || fail "invalid block was overwritten"
-  printf '<!-- copilot-workflow:begin -->\n<!-- copilot-workflow:end -->\n<!-- paseo-agent-team:begin -->\n<!-- paseo-agent-team:end -->\n' > "$target/AGENTS.md"
-  if (cd "$target" && "$REPO_ROOT/init.sh" --with adr) > "$TEST_ROOT/output" 2>&1; then fail "mixed markers accepted"; fi
-  printf 'ok: malformed and mixed managed blocks fail without data loss\n'
+  printf '<!-- paseo-agent-team:begin -->\n<!-- paseo-agent-team:end -->\n<!-- paseo-agent-team:begin -->\n<!-- paseo-agent-team:end -->\n' > "$target/AGENTS.md"
+  cp "$target/AGENTS.md" "$TEST_ROOT/bad-original"
+  if (cd "$target" && "$REPO_ROOT/init.sh" --with adr) > "$TEST_ROOT/output" 2>&1; then fail "duplicate blocks accepted"; fi
+  cmp "$target/AGENTS.md" "$TEST_ROOT/bad-original" || fail "duplicate blocks were overwritten"
+  printf 'ok: reversed and duplicate managed blocks fail without data loss\n'
 }
 
 test_workflow_only_source() {
@@ -206,10 +205,33 @@ test_workflow_only_source() {
   printf 'ok: local source resolution needs no plugin or retired runtime\n'
 }
 setup_openspec
+test_worktree_hooks() {
+  local target="$TEST_ROOT/hooks-main" worktree="$TEST_ROOT/hooks-worktree"
+  mkdir -p "$target"
+  git -C "$target" init -q
+  git -C "$target" -c user.name=Test -c user.email=test@example.com commit -q --allow-empty -m initial
+  mkdir -p "$target/nested"
+  run_install "$target/nested" --with adr,hooks
+  [ ! -e "$target/.git/hooks/pre-commit" ] || fail "nested installation unexpectedly changed repository hooks"
+  if grep -qx '  - hooks' "$target/nested/.paseo-agent-team.yaml"; then fail "nested installation falsely reported hooks installed"; fi
+  git -C "$target" worktree add -q -b linked "$worktree"
+  printf '#!/bin/sh\necho chained >> hook.log\n' > "$target/.git/hooks/pre-commit"
+  chmod +x "$target/.git/hooks/pre-commit"
+  run_install "$worktree" --with hooks
+  grep -qx '  - hooks' "$worktree/.paseo-agent-team.yaml" || fail "worktree hook was skipped"
+  (cd "$worktree" && PASEO_AGENT_TEAM_SKIP_HOOKS=1 "$target/.git/hooks/pre-commit") > "$TEST_ROOT/output" 2>&1 || fail "worktree hook failed"
+  [ "$(cat "$worktree/hook.log")" = chained ] || fail "worktree user hook did not run"
+  (cd "$target" && .git/hooks/pre-commit) > "$TEST_ROOT/output" 2>&1 || fail "uninitialized sibling worktree hook failed"
+  git -C "$worktree" config core.hooksPath .custom-hooks
+  run_install "$worktree" --with hooks
+  [ -x "$worktree/.custom-hooks/pre-commit" ] || fail "custom hook path ignored"
+  printf 'ok: linked worktrees and custom hook paths preserve chained hooks\n'
+}
 test_standalone_installation
 test_existing_openspec_config
-test_legacy_upgrade
+test_managed_rerun
 test_bad_markers
 test_workflow_only_source
 test_openspec_recovery
+test_worktree_hooks
 printf 'All regression tests passed.\n'

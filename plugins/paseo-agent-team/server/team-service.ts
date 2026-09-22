@@ -1,6 +1,5 @@
-import { realpath } from "node:fs/promises";
-import { roles, roleSchema, startSchema, type Member, type StartInput, type TeamState, type Choices } from "../shared/team";
-import { readState, saveState, workflow } from "./storage";
+import { roles, roleSchema, customRoleSchema, startSchema, type Member, type StartInput, type TeamState, type Choices } from "../shared/team";
+import { readState, saveState, workflow, withProjectLock } from "./storage";
 
 export interface Runtime {
   directory(workspaceId: string): Promise<string>;
@@ -12,16 +11,10 @@ export interface Runtime {
   send(agentId: string, prompt: string): Promise<void>;
   archive(agentId: string): Promise<void>;
 }
-const workspaceLocks = new Map<string, Promise<unknown>>();
 export class TeamService {
-  private locks = workspaceLocks;
   constructor(private runtime: Runtime) {}
   private async locked<T>(workspaceId: string, action: (root: string) => Promise<T>): Promise<T> {
-    const root = await realpath(await this.runtime.directory(workspaceId));
-    const previous = this.locks.get(root) ?? Promise.resolve();
-    const pending = previous.catch(() => {}).then(() => action(root));
-    this.locks.set(root, pending);
-    try { return await pending; } finally { if (this.locks.get(root) === pending) this.locks.delete(root); }
+    return withProjectLock(await this.runtime.directory(workspaceId), action);
   }
   private async reconcile(member: Member, origin: string) {
     try {
@@ -57,7 +50,7 @@ export class TeamService {
       if (existing) { await this.reconcile(existing, input.workspaceId); await saveState(root, state); return existing; }
       const choice = (await this.runtime.choices()).choices.find(item => item.id === input.choiceId);
       if (!choice) throw new Error("Selected profile/model is no longer available. Refresh the configuration choices.");
-      const member: Member = { requestId: input.requestId, role: input.role, task: input.task,
+      const member: Member = { requestId: input.requestId, role: input.role, ...(input.customRole ? { customRole: input.customRole } : {}),
         config: choice.config, isolation: input.isolation, createdAt: new Date().toISOString(), status: "creating", output: "" };
       state.members.push(member); await saveState(root, state);
       try {
@@ -95,12 +88,16 @@ export class TeamService {
   }
 }
 export function memberPrompt(member: Member) {
-  const role = roles[roleSchema.parse(member.role)];
-  return `You are the ${role.title} helper for a user-requested agent team. The existing primary agent is the Tech Lead; you are not the lead.
+  const role = roleSchema.parse(member.role);
+  const custom = role === "custom" ? customRoleSchema.parse(member.customRole) : undefined;
+  const title = role === "custom" ? custom!.name : roles[role].title;
+  const instructions = role === "custom" ? custom!.instructions : roles[role].instructions;
+  return `You are the ${title} helper for a user-requested agent team. The existing primary agent is the Tech Lead; you are not the lead.
 Read AGENTS.md and relevant OpenSpec/ADR context before work. Architecture, core development, maintenance, and all openspec/ and adr/ edits belong to the Tech Lead. Follow only your helper scope below.
-${role.instructions}
+${instructions ? `Standing role responsibilities:\n${instructions}\n` : ""}
+Shared team rules:
 Do not launch further agents. Do not commit or merge without an explicit user request. The Tech Lead personally reviews your result before integration.
-If the task lacks the context, concrete requirements, expected output, or acceptance criteria needed to proceed, report what is missing before making changes.
-Task:
-${member.task}`;
+Return concise deliverables and verification evidence. Report conflicts or work requiring architectural judgment to the Tech Lead.
+These responsibilities define your ongoing role, not an assignment to begin work. Wait for an explicit user assignment before taking action.
+Each user message supplies the current task or follow-up. If it lacks the context, concrete requirements, expected output, or acceptance criteria needed to proceed, report what is missing before making changes.`;
 }

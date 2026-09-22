@@ -7,7 +7,7 @@ An OpenSpec engineering workflow for any coding agent, with an optional native P
 | Mode | Installation | Capabilities |
 |------|--------------|--------------|
 | Standalone workflow | Run `init.sh` in your project | OpenSpec, ADR rules, general skills, and discipline hooks |
-| Paseo enhancement | Install Agent Team on your Paseo host | Workspace panel, profile selection, bounded helper tasks, results, follow-ups, and archival |
+| Paseo enhancement | Install Agent Team on your Paseo host | Project setup and repair, workflow status, profile selection, helper tasks, results, follow-ups, and archival |
 
 ## Install the engineering workflow
 
@@ -30,6 +30,8 @@ cd /path/to/your-project
 
 `--with` replaces the component list. `--language "Simplified Chinese"` sets the language for a new OpenSpec configuration; existing projects retain their context. `--tools agents` is the default tool integration.
 
+Managed instructions and hooks use `paseo-agent-team`; `.paseo-agent-team.yaml` records each installation. `PASEO_AGENT_TEAM_REPO` overrides the remote source, and `PASEO_AGENT_TEAM_SKIP_HOOKS=1` is the maintenance bypass. Rerunning refreshes managed assets while preserving surrounding instructions and user hooks.
+
 Describe a change to your coding agent. Significant changes follow proposal → specs → design → ADR → tasks → implementation → verification → archive. Small fixes and documentation edits can proceed directly.
 
 ## Add Agent Team in Paseo
@@ -48,15 +50,21 @@ paseo plugin ls
 
 The plugin should report `running`. Install it once per daemon and use it across workspaces. In the target workspace, choose **Open Agent Team** in the Command Center or submit `/agent-team`.
 
-1. Choose Researcher (external research), Writer (`docs/`), or Worker (simple chores).
-2. Select a configured Paseo profile or an available model.
-3. Supply context, requirements, expected output, and acceptance criteria, then press **Start selected member**.
-4. Open the conversation or refresh the panel to inspect status and output. Send follow-ups as needed.
-5. Review and integrate the result, then archive the member. Its worktree remains available.
+The panel opens on **Team** for members and their output. Open **Project → Configure setup** to select components and artifact language, then **Review setup changes → Install selected components**. The panel runs the bundled installer on the daemon host and supports cancellation and explicit repair. Existing projects can use **Repair / update workflow**. Environment details, installation logs, and the onboarding prompt expand when needed. Git, Bash, and the OpenSpec CLI must be available on that host; missing tools are explained in the panel.
 
-Your existing primary agent is Tech Lead and owns architecture, core code, OpenSpec/ADR, and final review. Worker requires a separate worktree. Researcher and Writer can use the current workspace within their role scopes. Role prompts do not replace provider permission settings.
+After setup, copy the onboarding prompt into your existing primary conversation to derive project specs, architecture, and ADRs. Then, when you need help:
 
-Opening the panel starts no members. Each explicit launch creates one member; the plugin does not automatically start a fixed team or attach members to an existing parent conversation.
+1. Open **Team → New member** (or **Add first member**). Choose Researcher (external research), Writer (`docs/`), Worker (simple chores), or **Custom** (a named helper with optional standing responsibilities).
+2. Open the searchable profile picker and select a configured Paseo profile or an available model.
+3. Review the role responsibilities and isolation, then press **Create member**. It waits for an assignment.
+4. Use **Open conversation** or **Message** to assign work with context, requirements, expected output, and acceptance criteria. Refresh the team to inspect status and output; expand **Details** for more.
+5. Review and integrate the result, then archive the member from **Details**. Its worktree and results remain available under **Archived**.
+
+For Custom members, **Responsibilities** describes what the role handles over time. **Save preset** retains its name, responsibilities, profile/model, and isolation preference in this project. Reuse it through **Project presets**, update it, save a new variant, or delete it. Saving a preset creates no agent. **Create member** creates the configured agent without sending work; assign work later in its conversation. Each member stores its own role configuration and results; preset edits do not alter it.
+
+Your existing primary agent is Tech Lead and owns architecture, core code, OpenSpec/ADR, and final review. Worker requires a separate worktree. Researcher, Writer, and Custom members can use the current workspace within their role scopes. Role prompts do not replace provider permission settings.
+
+Opening the panel starts no members. Each explicit creation action creates one member; the plugin does not automatically start a fixed team or attach members to an existing parent conversation.
 
 ## Project layout
 
@@ -73,7 +81,7 @@ scripts/                        Discipline hook and installer regressions
 docs/                           Setup, workflow, roles, and architecture
 ```
 
-The plugin creates ignored `.paseo-agent-team/` state in the originating project when starting a member. OpenSpec and ADRs remain the sources of truth for capabilities and architecture.
+The plugin creates ignored `.paseo-agent-team/` state in the originating project when starting setup, creating a member, or saving a preset. Setup records, bounded output, and custom presets survive plugin reload; interrupted setup is reported for explicit repair. OpenSpec and ADRs remain the sources of truth for capabilities and architecture.
 
 ## Documentation and contributions
 

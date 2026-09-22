@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Enforce OpenSpec artifact validation and accepted ADR immutability before commits. The versioned scripts/pre-commit.sh runs through a Git hook shim; PASEO_AGENT_TEAM_SKIP_HOOKS=1 is the explicit maintenance escape hatch, with the old variable retained for migration.
+Enforce OpenSpec artifact validation and accepted ADR immutability before commits. The versioned scripts/pre-commit.sh runs through a Git hook shim; PASEO_AGENT_TEAM_SKIP_HOOKS=1 is the explicit maintenance escape hatch.
 
 ## Requirements
 
@@ -41,9 +41,9 @@ The pre-commit hook MUST reject modification or deletion of git-tracked ADR file
 
 ### Requirement: Named maintenance escape hatch
 
-The discipline hook SHALL accept `PASEO_AGENT_TEAM_SKIP_HOOKS=1`, retaining `COPILOT_WORKFLOW_SKIP_HOOKS=1` as a migration alias. Existing OpenSpec validation, user hook chaining, and ADR immutability MUST remain effective by default.
+The discipline hook SHALL accept `PASEO_AGENT_TEAM_SKIP_HOOKS=1` as its sole maintenance bypass. Existing OpenSpec validation, user hook chaining, and ADR immutability MUST remain effective by default.
 
 #### Scenario: Explicit maintenance bypass
 
-- **WHEN** either supported bypass variable equals 1
+- **WHEN** `PASEO_AGENT_TEAM_SKIP_HOOKS` equals 1
 - **THEN** the hook reports the bypass and exits successfully without running discipline checks

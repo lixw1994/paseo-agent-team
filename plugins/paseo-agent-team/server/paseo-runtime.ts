@@ -1,5 +1,5 @@
 import type { PaseoApi } from "@getpaseo/client";
-import { type Choices, configSchema } from "../shared/team";
+import { type Choices, configSchema, memberRoleTitle } from "../shared/team";
 import { memberPrompt, type Runtime } from "./team-service";
 
 export function paseoRuntime(paseo: PaseoApi): Runtime {
@@ -50,7 +50,7 @@ export function paseoRuntime(paseo: PaseoApi): Runtime {
     async create(workspaceId, member, origin) {
       const agent = await paseo.workspaces.ref(workspaceId).agents.create({
         config: { ...member.config, systemPrompt: memberPrompt(member) },
-        title: `Agent Team · ${member.role}`, prompt: member.task,
+        title: `Agent Team · ${memberRoleTitle(member.role, member.customRole?.name)}`,
         labels: { "paseo-agent-team": origin, "team-request": member.requestId },
       });
       return agent.id;

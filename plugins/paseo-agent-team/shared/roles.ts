@@ -29,9 +29,7 @@ Run relevant tests or a minimal verification command. Return changed files with 
   },
 } as const;
 
-// Earlier plugin records keep their real role; they are not new creation options.
-export function memberRoleTitle(role: string): string {
-  if (role === "reviewer") return "Reviewer (legacy)";
-  if (role === "implementer") return "Implementer (legacy)";
-  return roles[role as keyof typeof roles]?.title ?? role;
+export function memberRoleTitle(role: keyof typeof roles | "custom", customName?: string): string {
+  if (role === "custom") return customName ?? "Custom";
+  return roles[role].title;
 }

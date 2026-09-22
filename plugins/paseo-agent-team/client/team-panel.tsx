@@ -1,131 +1,176 @@
 import { type PluginWorkspacePanelProps, useRpc, useWorkspace } from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { roles, memberRoleTitle, teamArchive, teamChoices, teamFollowup, teamRequest, teamStart, teamView, type Member } from "../shared/team";
+import { memberRoleTitle, roles, teamArchive, teamFollowup, teamView, type Member } from "../shared/team";
+import { MemberComposer } from "./member-composer";
+import { SetupPanel } from "./setup-panel";
+import { Badge, Button, Card, Disclosure, Notice, PanelTheme, row, useUi } from "./ui";
 
-export function TeamPanel({ workspaceId, theme, layout, navigation }: PluginWorkspacePanelProps) {
+export function TeamPanel(props: PluginWorkspacePanelProps) {
+  return <PanelTheme value={props.theme}><TeamWorkspace key={props.workspaceId} {...props} /></PanelTheme>;
+}
+
+function TeamWorkspace({ workspaceId, layout, navigation }: PluginWorkspacePanelProps) {
   const name = useWorkspace(workspaceId, workspace => workspace.name);
-  const read = useRpc(teamView), choices = useRpc(teamChoices), start = useRpc(teamStart);
-  const follow = useRpc(teamFollowup), archive = useRpc(teamArchive), request = useRpc(teamRequest);
+  const { c, text, muted } = useUi();
+  const read = useRpc(teamView);
   const view = useQuery({ queryKey: ["agent-team", workspaceId], queryFn: () => read({ workspaceId }) });
-  const configuration = useQuery({ queryKey: ["agent-team-choices"], queryFn: () => choices({}) });
-  const [role, setRole] = useState<keyof typeof roles>("researcher");
-  const [choiceId, setChoiceId] = useState("");
-  const [choiceSearch, setChoiceSearch] = useState("");
-  const [task, setTask] = useState("");
-  const [isolated, setIsolated] = useState(false);
-  const [followups, setFollowups] = useState<Record<string, string>>({});
-  const pending = useRef<{ signature: string; requestId: string } | null>(null);
-  const [actionMessage, setActionMessage] = useState("");
-  const creation = useMutation({
-    mutationFn: async () => {
-      const isolation = role === "worker" || isolated ? "worktree" as const : "shared" as const;
-      const signature = JSON.stringify({ workspaceId, role, task, choiceId, isolation });
-      if (pending.current?.signature !== signature) pending.current = { signature, ...(await request({})) };
-      return start({ workspaceId, role, task, choiceId, isolation, requestId: pending.current.requestId });
-    },
-    onSuccess: member => {
-      if (member.agentId) { pending.current = null; setTask(""); setActionMessage("Member started. Open its conversation or refresh to collect progress."); }
-      else setActionMessage("Creation is unresolved. Refresh to recover; retrying this same request will not launch a duplicate.");
-      void view.refetch();
-    },
-  });
-  const action = useMutation({
-    mutationFn: async ({ member, kind }: { member: Member; kind: "follow" | "archive" }) => {
-      if (kind === "archive") await archive({ workspaceId, requestId: member.requestId });
-      else await follow({ workspaceId, requestId: member.requestId, prompt: followups[member.requestId] ?? "" });
-      return { member, kind };
-    },
-    onSuccess: ({ member, kind }) => {
-      if (kind === "follow") setFollowups(values => ({ ...values, [member.requestId]: "" }));
-      setActionMessage(kind === "archive" ? "Member archived. Its worktree is retained for review and integration." : "Follow-up sent.");
-      void view.refetch();
-    },
-  });
-  const colors = theme.colors;
-  const text = { color: colors.foreground, fontSize: 14 };
-  const muted = { color: colors.foregroundMuted, fontSize: 13 };
-  const field = { color: colors.foreground, backgroundColor: colors.surface0, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 44 };
-  const busy = creation.isPending || action.isPending;
-  const button = (label: string, onPress: () => void, disabled = false, selected = false) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, selected }} disabled={disabled} onPress={onPress}
-      style={{ padding: 12, borderRadius: 8, borderWidth: 1, borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : colors.surface0, opacity: disabled ? 0.5 : 1 }}>
-      <Text style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: 14 }}>{label}</Text>
-    </Pressable>
-  );
-  const options = configuration.data?.choices ?? [];
-  const matchingOptions = options.filter(choice => `${choice.name} ${choice.config.provider} ${choice.notes}`.toLowerCase().includes(choiceSearch.trim().toLowerCase()));
-  const selectedChoice = options.find(choice => choice.id === choiceId);
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.surface0 }} contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 18 }}>
-      <View style={{ gap: 6 }}>
-        <Text style={{ ...text, fontSize: 24, fontWeight: "600" }}>Agent Team</Text>
-        <Text style={muted}>{name ?? "Workspace"} · OpenSpec workflow with on-demand helpers</Text>
-        <Text style={muted}>Opening this panel starts no agents. Choose one member and a bounded task when you need help.</Text>
-        <Text style={muted}>Tech Lead: your existing primary agent owns architecture, core code, OpenSpec/ADR, and final review. Researcher and Writer keep bulky context separate; use Worker sparingly for simple chores.</Text>
-      </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {button(view.isFetching ? "Refreshing…" : "Refresh team", () => { void view.refetch(); }, view.isFetching || busy)}
-        {button("Refresh profiles", () => { void configuration.refetch(); }, configuration.isFetching || busy)}
-      </View>
-      {[view.error, configuration.error, creation.error, action.error].filter(Boolean).map((error, index) => <Text key={index} accessibilityRole="alert" style={text}>{String(error)}</Text>)}
-      {actionMessage ? <Text accessibilityRole="alert" style={text}>{actionMessage}</Text> : null}
-      <View style={{ gap: 8 }}>
-        <Text style={{ ...text, fontWeight: "600" }}>Engineering workflow</Text>
-        {view.isPending ? <Text style={muted}>Loading workspace…</Text> : !view.data?.workflowInstalled ? <Text style={muted}>Initialize the standalone workflow with this repository's init.sh before engineering work.</Text> : null}
-        {view.data?.changes.map(change => <Text key={change.name} style={text}>{change.name} · {change.complete}/{change.total} tasks</Text>)}
-        {view.data?.workflowInstalled && !view.data.changes.length ? <Text style={muted}>No active OpenSpec changes.</Text> : null}
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={{ ...text, fontWeight: "600" }}>Start a member</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {(Object.keys(roles) as (keyof typeof roles)[]).map(value => <View key={value}>{button(roles[value].title, () => setRole(value), busy, role === value)}</View>)}
-        </View>
-        <Text style={text}>{roles[role].summary}</Text>
-        <Text style={muted}>{roles[role].instructions}</Text>
-        <Text style={muted}>Prior preference: {roles[role].configurationHint}. Select a compatible Paseo profile/model below; this preference does not apply settings automatically.</Text>
-        <Text style={text}>Agent profile</Text>
-        {configuration.isPending ? <Text style={muted}>Loading configured profiles…</Text> : !options.length ? <Text style={muted}>No usable profiles or models. Configure a provider in Paseo, then refresh.</Text> : null}
-        {options.length ? <>
-          <TextInput accessibilityLabel="Search profiles and models" placeholder="Search profiles and models" placeholderTextColor={colors.foregroundMuted} value={choiceSearch} onChangeText={setChoiceSearch} style={field} />
-          <Text style={muted}>{selectedChoice ? `Selected: ${selectedChoice.name}` : "Select a profile or model"} · {matchingOptions.length} matches</Text>
-          <ScrollView nestedScrollEnabled style={{ maxHeight: layout.compact ? 220 : 300 }} contentContainerStyle={{ gap: 8 }}>
-            {matchingOptions.map(choice => <View key={choice.id} style={{ gap: 4 }}>{button(choice.name, () => setChoiceId(choice.id), busy, choiceId === choice.id)}<Text style={muted}>{choice.config.provider}{choice.notes ? ` · ${choice.notes}` : ""}</Text></View>)}
-          </ScrollView>
-        </> : null}
-        {configuration.data?.warnings.map((warning, index) => <Text key={index} style={muted}>{warning}</Text>)}
-        {role === "worker" ? <Text style={muted}>Worker uses an isolated worktree for simple chores. Return complex work to the Tech Lead.</Text> :
-          button(isolated ? "Isolation: separate worktree" : role === "writer" ? "Isolation: current workspace (docs/ edits only)" : "Isolation: current workspace (external research only)", () => setIsolated(value => !value), busy)}
-        {role === "worker" || isolated ? <Text style={muted}>The worktree starts from the current branch. Commit required input changes before launching; uncommitted files are not copied. Review and merge manually.</Text> : null}
-        <Text style={muted}>Role scopes are instructions; actual access follows the selected provider/profile permissions.</Text>
-        <TextInput accessibilityLabel="Member task" placeholder="Include context, requirements, expected output, and acceptance criteria" placeholderTextColor={colors.foregroundMuted} multiline value={task} onChangeText={setTask} editable={!busy} style={{ ...field, minHeight: 110, textAlignVertical: "top" }} />
-        {button(creation.isPending ? "Starting…" : "Start selected member", () => { setActionMessage(""); creation.mutate(); }, busy || !task.trim() || !options.some(choice => choice.id === choiceId) || !view.data?.workflowInstalled, true)}
-      </View>
-      <View style={{ gap: 14 }}>
-        <Text style={{ ...text, fontSize: 18, fontWeight: "600" }}>Members</Text>
-        {!view.data?.members.length ? <Text style={muted}>No members yet. Your standalone workflow is ready to use solo.</Text> : null}
-        {view.data?.members.map(member => (
-          <View key={member.requestId} style={{ gap: 10, borderWidth: 1, borderColor: colors.border, padding: 14, borderRadius: 10 }}>
-            <Text style={{ ...text, fontWeight: "600" }}>{memberRoleTitle(member.role)} · {member.status}</Text>
-            <Text style={muted}>{member.config.provider} · {member.isolation === "worktree" ? "isolated worktree" : "current workspace"}</Text>
-            <Text selectable style={text}>{member.task}</Text>
-            {member.error ? <Text accessibilityRole="alert" style={text}>{member.error}</Text> : null}
-            {member.output ? <Text selectable style={text}>{member.output}</Text> : <Text style={muted}>No assistant output collected yet.</Text>}
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {member.agentId && navigation ? button("Open conversation", () => navigation.openAgent({ agentId: member.agentId! })) : null}
-              {member.workspaceId && member.workspaceId !== workspaceId && navigation ? button("Open worktree", () => navigation.openWorkspace({ workspaceId: member.workspaceId! })) : null}
-            </View>
-            {member.agentId && member.status !== "archived" ? <>
-              <TextInput accessibilityLabel={`Follow-up for ${member.role}`} placeholder="Ask for clarification or the next bounded task" placeholderTextColor={colors.foregroundMuted} multiline value={followups[member.requestId] ?? ""} onChangeText={value => setFollowups(previous => ({ ...previous, [member.requestId]: value }))} editable={!busy} style={field} />
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {button("Send follow-up", () => action.mutate({ member, kind: "follow" }), busy || !followups[member.requestId]?.trim())}
-                {button(["running", "initializing"].includes(member.status) ? "Stop and archive member" : "Archive member", () => action.mutate({ member, kind: "archive" }), busy)}
-              </View>
-            </> : null}
+  const [tab, setTab] = useState<"team" | "project">("team");
+  const [width, setWidth] = useState(0);
+  const [composer, setComposer] = useState(false);
+  const [archived, setArchived] = useState(false);
+  const [message, setMessage] = useState("");
+  const scroll = useRef<ScrollView>(null);
+  const narrow = layout.compact || width < 600;
+  const members = view.data?.members ?? [];
+  const active = members.filter(member => member.status !== "archived");
+  const history = members.filter(member => member.status === "archived");
+  const visible = archived ? history : active;
+  const running = active.filter(member => ["running", "initializing"].includes(member.status)).length;
+  const switchTab = (value: typeof tab) => { setTab(value); scroll.current?.scrollTo({ y: 0, animated: false }); };
+  const openComposer = () => { setComposer(true); setTab("team"); setMessage(""); scroll.current?.scrollTo({ y: 0, animated: true }); };
+  const refresh = () => { void view.refetch(); };
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)} style={{ flex: 1, backgroundColor: c.surface0 }}>
+    <View style={{ paddingHorizontal: narrow ? 16 : 28, paddingTop: 20, borderBottomWidth: 1, borderColor: c.border }}>
+      <View style={{ width: "100%", maxWidth: 920, alignSelf: "center", gap: 16 }}>
+        <View style={{ ...row, justifyContent: "space-between" }}>
+          <View style={{ flex: 1, minWidth: 120, gap: 3 }}>
+            <Text accessibilityRole="header" style={{ ...text, fontSize: 22, lineHeight: 28, fontWeight: "600", letterSpacing: -0.5 }}>Agent Team</Text>
+            <Text numberOfLines={1} style={muted}>{name ?? "Workspace"}</Text>
           </View>
-        ))}
+          {tab === "team" && !composer && active.length ? <Button label="New member" icon="Plus" primary onPress={openComposer} disabled={!view.data?.workflowInstalled} /> : null}
+        </View>
+        <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 24 }}>
+          {([{ id: "team", title: "Team", icon: "Users" }, { id: "project", title: "Project", icon: "FolderCog" }] as const).map(item => <Pressable key={item.id}
+            accessibilityRole="tab" accessibilityLabel={item.title} aria-selected={tab === item.id} onPress={() => switchTab(item.id)}
+            style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 7, borderBottomWidth: 2, borderBottomColor: tab === item.id ? c.accent : "transparent", paddingBottom: 2 }}>
+            <Icon name={item.icon} size={16} color={tab === item.id ? c.foreground : c.foregroundMuted} />
+            <Text style={{ ...text, fontWeight: tab === item.id ? "600" : "400", color: tab === item.id ? c.foreground : c.foregroundMuted }}>{item.title}</Text>
+            {item.id === "team" && active.length ? <Text style={{ ...muted, fontSize: 12 }}>{active.length}</Text> : null}
+          </Pressable>)}
+        </View>
+      </View>
+    </View>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: narrow ? 16 : 28, paddingBottom: 40 }}>
+      <View style={{ width: "100%", maxWidth: 920, alignSelf: "center", gap: 20 }}>
+        {view.error ? <Notice error>{String(view.error)}</Notice> : null}
+        <View style={{ display: tab === "team" ? "flex" : "none", gap: 20 }}>
+          {view.isPending ? <Text style={muted}>Loading team…</Text> : null}
+          {view.data && !view.data.workflowInstalled ? <View style={{ padding: 16, borderRadius: 10, backgroundColor: c.surface1, gap: 10 }}>
+            <Text style={{ ...text, fontWeight: "600" }}>Set up this project first</Text>
+            <Text style={muted}>Install the engineering workflow, then add a helper when you need one.</Text>
+            <View style={row}><Button label="Set up project" icon="ArrowRight" onPress={() => switchTab("project")} /></View>
+          </View> : null}
+          {message ? <Notice>{message}</Notice> : null}
+          <MemberComposer workspaceId={workspaceId} open={composer} narrow={narrow} ready={Boolean(view.data?.workflowInstalled)} onClose={() => setComposer(false)} onCreated={value => { setMessage(value); setArchived(false); refresh(); }} />
+          <View style={{ ...row, justifyContent: "space-between" }}>
+            <View style={{ gap: 2 }}>
+              <Text accessibilityRole="header" style={{ ...text, fontSize: 16, fontWeight: "600" }}>{archived ? "Archived members" : "Members"}</Text>
+              <Text style={muted}>{archived ? `${history.length} retained for review` : active.length ? `${active.length} members${running ? ` · ${running} running` : ""}` : "Add members with clear, ongoing responsibilities."}</Text>
+            </View>
+            <View style={row}>
+              {history.length ? <Button label={archived ? "Active members" : `Archived (${history.length})`} quiet onPress={() => setArchived(!archived)} /> : null}
+              <Button label={view.isFetching ? "Refreshing…" : "Refresh team"} icon="RefreshCw" quiet onPress={refresh} disabled={view.isFetching} />
+            </View>
+          </View>
+          {!view.isPending && !view.error && !visible.length && !composer ? <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: narrow ? 32 : 48, gap: 16, borderWidth: 1, borderColor: c.border, borderRadius: 12 }}>
+            <View style={{ padding: 14, backgroundColor: c.surface1, borderRadius: 14 }}><Icon name="Users" size={26} color={c.foregroundMuted} /></View>
+            <View style={{ maxWidth: 370, gap: 8 }}>
+              <Text style={{ ...text, textAlign: "center", fontSize: 18, fontWeight: "600" }}>{archived ? "No archived members" : "Give each member a role"}</Text>
+              <Text style={{ ...muted, textAlign: "center" }}>{archived ? "Archived conversations and results stay available here." : "Choose a built-in role or define your own. Create the member, then assign work in its conversation."}</Text>
+            </View>
+            {!archived ? <Button label="Add first member" icon="Plus" primary onPress={openComposer} disabled={!view.data?.workflowInstalled} /> : null}
+          </View> : null}
+          {[...visible].reverse().map(member => <MemberCard key={member.requestId} member={member} workspaceId={workspaceId} navigation={navigation} onChanged={value => { setMessage(value); refresh(); }} />)}
+          <View style={{ borderTopWidth: 1, borderColor: c.border, paddingTop: 12 }}>
+            <Disclosure title="How this team works">
+              <Text style={muted}>Your existing primary agent is Tech Lead: it owns architecture, core code, OpenSpec/ADR, and final review. Members hold ongoing roles and work on assignments you send. Opening this panel starts no agents.</Text>
+              <Text style={muted}>Choose a built-in role or define a Custom helper. Save reusable configurations as Presets. Creating a member sends no assignment; use its conversation or Message action to give it work. Review results before integration.</Text>
+            </Disclosure>
+          </View>
+        </View>
+        <View style={{ display: tab === "project" ? "flex" : "none", gap: 20 }}>
+          <SetupPanel workspaceId={workspaceId} narrow={narrow} onChanged={refresh} />
+          <Card>
+            <View style={{ ...row, justifyContent: "space-between" }}>
+              <Text accessibilityRole="header" style={{ ...text, fontSize: 16, fontWeight: "600" }}>OpenSpec changes</Text>
+              <Button label="Refresh changes" icon="RefreshCw" quiet onPress={refresh} disabled={view.isFetching} />
+            </View>
+            {view.data?.changes.map(change => <View key={change.name} style={{ gap: 8 }}>
+              <View style={{ ...row, justifyContent: "space-between" }}><Text style={{ ...text, flex: 1 }}>{change.name}</Text><Text style={muted}>{change.complete}/{change.total} tasks</Text></View>
+              <View accessibilityRole="progressbar" accessibilityLabel={change.name} aria-valuemin={0} aria-valuemax={Math.max(1, change.total)} aria-valuenow={change.complete} style={{ height: 4, backgroundColor: c.surface2, borderRadius: 2, overflow: "hidden" }}>
+                <View style={{ height: 4, width: `${change.total ? Math.min(100, change.complete / change.total * 100) : 0}%`, backgroundColor: c.accent }} />
+              </View>
+            </View>)}
+            {!view.data?.changes.length ? <Text style={muted}>{view.isPending ? "Loading changes…" : view.data?.workflowInstalled ? "No active changes. Start a change with your primary agent when you are ready." : "Project setup makes the engineering workflow available here."}</Text> : null}
+          </Card>
+        </View>
       </View>
     </ScrollView>
-  );
+  </View>;
+}
+
+function MemberCard({ member, workspaceId, navigation, onChanged }: {
+  member: Member; workspaceId: string; navigation: PluginWorkspacePanelProps["navigation"]; onChanged: (message: string) => void;
+}) {
+  const { c, text, muted, field } = useUi();
+  const follow = useRpc(teamFollowup), archive = useRpc(teamArchive);
+  const [expanded, setExpanded] = useState(false);
+  const [reply, setReply] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const action = useMutation({
+    mutationFn: async (kind: "follow" | "archive") => {
+      if (kind === "archive") await archive({ workspaceId, requestId: member.requestId });
+      else await follow({ workspaceId, requestId: member.requestId, prompt });
+      return kind;
+    },
+    onSuccess: kind => {
+      if (kind === "follow") { setPrompt(""); setReply(false); }
+      onChanged(kind === "archive" ? "Member archived. Its worktree is retained for review and integration." : "Message sent.");
+    },
+  });
+  const running = ["running", "initializing"].includes(member.status);
+  const tone = running ? "active" : ["error", "failed"].includes(member.status) ? "danger" : ["unresolved", "needs_input", "needs-input"].includes(member.status) ? "warning" : "neutral";
+  const builtinRole = member.role === "custom" ? undefined : roles[member.role];
+  const responsibilities = member.customRole?.instructions || builtinRole?.summary;
+  return <Card>
+    <View style={{ ...row, justifyContent: "space-between" }}>
+      <Text style={{ ...text, fontWeight: "600", flex: 1 }}>{memberRoleTitle(member.role, member.customRole?.name)}</Text>
+      <Badge label={member.status.replaceAll("_", " ")} tone={tone} />
+    </View>
+    <View style={{ gap: 6 }}>
+      <Text selectable numberOfLines={expanded ? undefined : 3} style={text}>{responsibilities || "No standing responsibilities added."}</Text>
+      <Text style={muted}>{member.role === "custom" ? "Custom · " : ""}{member.config.provider} · {member.isolation === "worktree" ? "Separate worktree" : "Current workspace"}</Text>
+    </View>
+    {member.error ? <Notice error>{member.error}</Notice> : null}
+    {member.output ? <View style={{ padding: 12, borderRadius: 8, backgroundColor: c.surface1, gap: 6 }}>
+      <Text style={{ ...muted, fontSize: 11, fontWeight: "600", letterSpacing: 0.7 }}>LATEST OUTPUT</Text>
+      {expanded ? <ScrollView nestedScrollEnabled style={{ maxHeight: 320 }}><Text selectable style={muted}>{member.output}</Text></ScrollView> : <Text selectable numberOfLines={3} style={muted}>{member.output}</Text>}
+    </View> : <Text style={muted}>{member.status === "idle" ? "Ready for work. Open the conversation or send a message to assign it." : "No output collected. Refresh the team or open the conversation."}</Text>}
+    <View style={row}>
+      {member.agentId && navigation ? <Button label="Open conversation" icon="MessageSquare" onPress={() => navigation.openAgent({ agentId: member.agentId! })} /> : null}
+      {member.agentId && member.status !== "archived" ? <Button label={reply ? "Close message" : "Message"} quiet onPress={() => setReply(!reply)} disabled={action.isPending} /> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={expanded ? "Hide member details" : "Show member details"} aria-expanded={expanded} onPress={() => setExpanded(!expanded)} style={{ ...row, flexWrap: "nowrap", minHeight: 44, paddingHorizontal: 8 }}>
+        <Text style={muted}>{expanded ? "Less" : "Details"}</Text><Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} color={c.foregroundMuted} />
+      </Pressable>
+    </View>
+    {reply && member.status !== "archived" ? <View style={{ gap: 10 }}>
+      <TextInput accessibilityLabel={`Message for ${memberRoleTitle(member.role, member.customRole?.name)}`} placeholder="Assign work or ask a question…" placeholderTextColor={c.foregroundMuted} multiline value={prompt} onChangeText={setPrompt} editable={!action.isPending} maxLength={16000} style={{ ...field, minHeight: 88, textAlignVertical: "top" }} />
+      <View style={row}><Button label={action.isPending ? "Sending…" : "Send message"} icon="Send" primary onPress={() => action.mutate("follow")} disabled={action.isPending || !prompt.trim()} /></View>
+    </View> : null}
+    {expanded ? <View style={{ gap: 10, paddingTop: 12, borderTopWidth: 1, borderColor: c.border }}>
+      {member.customRole || builtinRole ? <View style={{ gap: 6 }}>
+        <Text style={{ ...text, fontWeight: "600" }}>Role responsibilities</Text>
+        <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}><Text selectable style={muted}>{member.customRole ? member.customRole.instructions || "No standing responsibilities added. Shared team rules apply." : builtinRole?.instructions}</Text></ScrollView>
+      </View> : null}
+      <Text style={muted}>Created {new Date(member.createdAt).toLocaleString()}</Text>
+      <View style={row}>
+        {member.workspaceId && member.workspaceId !== workspaceId && navigation ? <Button label="Open worktree" icon="GitBranch" onPress={() => navigation.openWorkspace({ workspaceId: member.workspaceId! })} /> : null}
+        {member.agentId && member.status !== "archived" ? <Button label={running ? "Stop and archive member" : "Archive member"} icon="Archive" onPress={() => action.mutate("archive")} disabled={action.isPending} /> : null}
+      </View>
+    </View> : null}
+    {action.error ? <Notice error>{String(action.error)}</Notice> : null}
+  </Card>;
 }

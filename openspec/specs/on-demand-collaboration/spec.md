@@ -17,7 +17,7 @@ Root agent instructions SHALL define solo OpenSpec work as the default and expli
 
 ### Requirement: User-controlled team membership
 
-The Paseo enhancement SHALL launch members only after an explicit user action specifying the task and configuration. The primary agent or user SHALL review results before integration. Unavailable Paseo SHALL leave the independent workflow usable.
+The Paseo enhancement SHALL create members only after an explicit user action specifying their role and configuration. Members SHALL receive assignments later through explicit conversation messages; creation SHALL NOT send an initial task. The primary agent or user SHALL review results before integration. Unavailable Paseo SHALL leave the independent workflow usable.
 
 #### Scenario: Open the plugin panel
 
@@ -25,8 +25,7 @@ The Paseo enhancement SHALL launch members only after an explicit user action sp
 - **THEN** the panel shows workflow and team state without creating agents
 
 ### Requirement: Single Tech Lead ownership
-
-Root instructions SHALL keep the primary agent responsible for architecture, core development, maintenance, and all OpenSpec/ADR artifacts. Explicitly requested Researcher and Writer work SHALL isolate external-research and documentation context; Worker SHALL be used sparingly for simple chores. Complex problems and final decisions MUST remain with the lead. Task handoffs SHALL specify context, requirements, expected output, and acceptance criteria; independent work SHALL continue while helpers run. All output MUST receive lead review, including line-by-line review of worker code.
+Root instructions SHALL keep the primary agent responsible for architecture, core development, maintenance, and all OpenSpec/ADR artifacts. Explicitly requested Researcher and Writer work SHALL isolate external-research and documentation context; Worker SHALL be used sparingly for simple chores. User-defined Custom helpers SHALL follow their explicitly assigned responsibilities and the same shared team rules. Complex problems and final decisions MUST remain with the lead. Task handoffs SHALL specify context, requirements, expected output, and acceptance criteria; independent work SHALL continue while helpers run. All output MUST receive lead review, including line-by-line review of worker code.
 
 #### Scenario: Delegate a helper task
 

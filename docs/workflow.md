@@ -70,6 +70,6 @@ The primary agent owns all `openspec/` and `adr/` edits. Update the [architectur
 
 ## Local commit checks
 
-The installed `.git/hooks/pre-commit` shim chains existing user hooks and invokes versioned `scripts/pre-commit.sh`. It rejects edits to tracked numbered ADRs and runs `openspec validate --all --strict`. If the CLI is unavailable, it prints a notice and skips specification validation.
+The installed pre-commit shim uses Git's effective hook directory, including linked worktrees and `core.hooksPath`. It chains existing user hooks and invokes versioned `scripts/pre-commit.sh` from the committing checkout. It rejects edits to tracked numbered ADRs and runs `openspec validate --all --strict`. If the CLI is unavailable, it prints a notice and skips specification validation.
 
 For explicitly authorized maintenance, `PASEO_AGENT_TEAM_SKIP_HOOKS=1` skips the managed discipline checks. Ordinary commits run the checks.

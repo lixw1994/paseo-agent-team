@@ -1,6 +1,6 @@
 # Install the workflow and optional plugin
 
-Install the engineering workflow in your Git project, then add Paseo Agent Team if you want a native collaboration panel. The standalone workflow works with any coding agent that reads `AGENTS.md`.
+Install the engineering workflow directly in your Git project, or install Paseo Agent Team once and initialize projects from its panel. The standalone workflow works with any coding agent that reads `AGENTS.md`.
 
 ## Install the standalone workflow
 
@@ -27,16 +27,17 @@ cd /path/to/your-project
 | `--tools agents` | Default shared OpenSpec skill integration |
 | `--language English` | Language for a new OpenSpec configuration |
 | `PASEO_AGENT_TEAM_REPO` | Override the source repository used by remote execution |
+| `PASEO_AGENT_TEAM_SKIP_HOOKS=1` | Explicit maintenance bypass for discipline checks; user hooks still run |
 
 General skills come from `skills.txt` and `openspec/schemas/*/skills.txt`. Rerunning preserves existing OpenSpec context, including its artifact language. Edit `openspec/config.yaml` directly to change that context.
 
-If OpenSpec is unavailable, install the CLI using the command above and rerun the installer. Local Git hooks need installation after each clone. The installer reports any component it could not install.
+If OpenSpec is unavailable, install the CLI using the command above and rerun the installer. Local Git hooks need installation after each clone. The installer resolves the effective hook directory through Git, including linked worktrees and `core.hooksPath`; shared hooks chain existing user hooks and tolerate sibling worktrees without the discipline script. The installer reports any component it could not install.
 
 ## Update workflow assets
 
 Rerun the remote installer to install current workflow assets, or update a local checkout and run `init.sh` from the target project. Supply `--with` when you want to refresh only selected components.
 
-The installer replaces managed instruction blocks, schemas, and skills. It preserves instructions outside the managed block and chains existing user hooks. Keep project-specific customization outside managed assets. The manifest records the components installed by the current run.
+The installer replaces `paseo-agent-team` managed instruction blocks, schemas, and skills. It preserves instructions outside the managed block and chains existing user hooks. Keep project-specific customization outside managed assets. The `.paseo-agent-team.yaml` manifest records the components installed by the current run.
 
 ## Add Paseo enhancement
 
@@ -52,13 +53,19 @@ paseo plugin install "$PWD"
 paseo plugin ls
 ```
 
-Require status `running`, then open **Open Agent Team** from the workspace Command Center or submit `/agent-team`. Installing the plugin does not launch members. Follow the [Paseo guide](./paseo-guide.md) to assign a task.
+Require status `running`, then open **Open Agent Team** from the workspace Command Center or submit `/agent-team`. Use **Project → Configure setup → Review setup changes → Install selected components** in each target Git project. You do not need a second source checkout in each project. The panel displays missing prerequisites, selected components, and the actual hook location before installation. See the [Paseo guide](./paseo-guide.md) for setup results, member configuration, and assignments.
 
 For a remote daemon, use an absolute plugin directory on that host and the CLI's `--host` option. A local directory path must exist on the target host.
 
+## Update the plugin’s bundled workflow
+
+Panel installation uses the workflow snapshot prepared with the installed plugin; it does not fetch the latest remote installer. Update your source checkout, run `npm ci` and `npm run typecheck` from the plugin directory, then run `paseo plugin reload paseo-agent-team`. Use **Repair / update workflow** in each target project to apply the updated managed assets.
+
+The preparation command requires the complete repository checkout, including its root workflow assets. Keep the plugin in `plugins/paseo-agent-team/` inside that checkout.
+
 ## Describe an existing codebase
 
-After installing the workflow, ask your coding agent to establish its current requirements and decisions:
+After installing the workflow, use **Copy onboarding prompt** in the panel or ask your coding agent to establish its current requirements and decisions:
 
 ```text
 Read this codebase and derive its current capabilities into openspec/specs/.

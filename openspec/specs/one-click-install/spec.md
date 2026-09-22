@@ -20,18 +20,23 @@ Install the standalone OpenSpec engineering workflow into a Git project with mer
 - **WHEN** `--with squad` is supplied
 - **THEN** installation fails before changing the target and lists the supported workflow components
 
-### Requirement: Managed instructions and upgrade compatibility
+### Requirement: Current managed installation
 
-New installations SHALL use `paseo-agent-team` marker blocks, `.paseo-agent-team.yaml`, and `PASEO_AGENT_TEAM_REPO`. Upgrades MUST recognize legacy copilot-workflow markers and hook shims, replace the managed block with exactly one new block, preserve surrounding user content, and avoid chaining the old managed hook recursively. Malformed or mixed marker blocks MUST fail before replacement. Legacy environment aliases SHALL remain accepted for migration.
+Installation SHALL use `paseo-agent-team` instruction markers and hook identity, `.paseo-agent-team.yaml`, and `PASEO_AGENT_TEAM_REPO`. Rerunning SHALL replace exactly one current managed block, preserve surrounding user content and user hooks, and avoid backing up or recursively chaining its own managed hook. Malformed current marker blocks MUST fail before replacement. The installer and panel SHALL implement only these current identifiers without compatibility aliases or automatic conversion of former formats.
 
-#### Scenario: Upgrade a legacy installation
+#### Scenario: Repeat a current managed installation
 
-- **WHEN** an existing project has a legacy managed block and hook
-- **THEN** the block migrates once, user instructions and previous user hook backups remain intact, and rerunning is idempotent
+- **WHEN** a project with a current managed block, managed hook, and user hook backup is installed again
+- **THEN** the managed block is refreshed once, surrounding user instructions stay intact, and the user hook is still invoked exactly once
+
+#### Scenario: Reject duplicate or reversed markers
+
+- **WHEN** a project's instructions contain duplicate current blocks or an end marker before its begin marker
+- **THEN** installation fails and the instructions remain unchanged
 
 ### Requirement: Safe selected-component upgrades
 
-Selected managed schemas and skills SHALL refresh without deleting user-owned content. Missing OpenSpec SHALL skip that component with guidance; failed initialization SHALL be retried on rerun. Self-install MUST preserve source assets. The manifest SHALL describe this run's components. The installer MUST NOT remove unrelated legacy runtime directories in other projects.
+Selected managed schemas and skills SHALL refresh without deleting user-owned content. Missing OpenSpec SHALL skip that component with guidance; failed initialization SHALL be retried on rerun. Self-install MUST preserve source assets. The manifest SHALL describe this run's components. The installer MUST NOT remove unrelated project files or directories.
 
 #### Scenario: Repair incomplete initialization
 
@@ -51,3 +56,21 @@ The workflow source checks SHALL depend only on workflow assets. Plugin code, de
 
 - **WHEN** a local source contains workflow assets but no plugin directory
 - **THEN** workflow installation succeeds normally
+
+### Requirement: Hook installation follows Git workspace layout
+
+The installer SHALL resolve the effective hook directory through Git for ordinary repositories and linked worktrees. It SHALL preserve and chain existing hooks at that location. The generated shim MUST execute the versioned discipline script from the committing worktree and tolerate another worktree that has not installed that script.
+
+#### Scenario: Install in a linked worktree
+
+- **WHEN** the target contains a `.git` file and hooks are selected
+- **THEN** the effective pre-commit hook is installed, prior hooks remain chained, and hooks are recorded as installed
+
+### Requirement: Plugin preparation reuses workflow sources
+
+Plugin preparation SHALL package the standalone installer and its declared workflow assets from this repository into a server-only bundle. The plugin MUST execute that same installer from a temporary source directory and MUST NOT silently download a different installation source.
+
+#### Scenario: Prepare an installed plugin
+
+- **WHEN** plugin preparation runs from a complete repository checkout
+- **THEN** it creates an asset bundle containing the installer, schemas, rule files, declared skills, and their license files

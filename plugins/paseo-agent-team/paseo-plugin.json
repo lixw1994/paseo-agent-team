@@ -1,5 +1,6 @@
 {
   "id": "paseo-agent-team",
+  "build": [["node", "scripts/bundle-workflow.mjs"]],
   "requirements": {
     "paseo": "^0.8.0"
   }

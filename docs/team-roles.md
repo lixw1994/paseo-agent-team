@@ -1,6 +1,6 @@
 # Team roles
 
-This reference describes the responsibilities of Paseo Agent Team members. Use it to select a helper and define a task while keeping architecture and engineering ownership with your existing primary agent.
+This reference describes the responsibilities of Paseo Agent Team members. Use it to configure an ongoing role and assign work later while keeping architecture and engineering ownership with your existing primary agent.
 
 | Role | Responsibility | Write scope | Return to the lead |
 |------|----------------|-------------|--------------------|
@@ -8,8 +8,23 @@ This reference describes the responsibilities of Paseo Agent Team members. Use i
 | Researcher | External documentation, issues, releases, papers, third-party comparisons | Requested reports under `.paseo-agent-team/handoff/` only | Condensed conclusion, sources and retrieval dates, risks, recommendations |
 | Writer | Documentation based on lead input and verifiable project facts | `docs/` only | Changed paths, brief summaries, unresolved TODOs |
 | Worker | Simple, explicit, independently verifiable chores; use sparingly | Task-specified files in an isolated worktree; no OpenSpec/ADR edits | Changed files, verification evidence, deviations or questions |
+| Custom | User-defined ongoing responsibilities; assignments arrive in its conversation | Defined by the assignment under shared lead ownership and provider permissions | Concise deliverables and verification evidence |
 
-The Tech Lead is the current primary agent. The plugin does not create another lead. Researcher, Writer, and Worker are the only new-member choices; the form initially selects Researcher, with model and task left empty. No members start until explicitly requested.
+The Tech Lead is the current primary agent. The plugin does not create another lead. Researcher, Writer, Worker, and Custom are the new-member choices; the form initially selects Researcher, with no model selected. No members start until explicitly requested.
+
+## Responsibilities, presets, and members
+
+| Concept | Lifetime | Example |
+|---------|----------|---------|
+| Role name | Member identity | Accessibility reviewer |
+| Role responsibilities | Standing guidance across assignments; optional for Custom | Report accessibility issues without editing files |
+| Preset | Reusable project configuration | Saved name, responsibilities, profile/model ID, and isolation |
+| Member | Actual agent with the configured role | An Accessibility reviewer waiting for work |
+| Conversation message | A concrete assignment or follow-up | Review keyboard navigation in the checkout dialog |
+
+Built-in roles supply responsibilities automatically. Custom responsibilities are optional; shared team rules always apply. Standing guidance goes into the system prompt. Creation sends no assignment; send work through the conversation or the panel Message action when ready.
+
+Presets do not redefine existing members: each member keeps its creation identity and responsibilities. See [Create and reuse a custom member](./paseo-guide.md#create-and-reuse-a-custom-member) for preset operations.
 
 ## Ownership and delegation
 
@@ -48,4 +63,4 @@ The panel displays the user's role preferences as guidance; it does not apply mo
 
 Actual choices come from Paseo profiles or provider discovery. A matching model name alone does not apply the preferred reasoning setting. Configure that setting in a Paseo profile where supported, then select the profile. Unavailable preferences are not silently replaced.
 
-Researcher and Writer can use the current workspace or an explicitly selected worktree. Worker always uses a worktree; uncommitted inputs are not copied. Role write scopes are prompt instructions, not operating-system permission enforcement.
+Custom has no model preference; select an available profile or model explicitly. Researcher, Writer, and Custom can use the current workspace or an explicitly selected worktree. Worker always uses a worktree; uncommitted inputs are not copied. Role write scopes are prompt instructions, not operating-system permission enforcement.

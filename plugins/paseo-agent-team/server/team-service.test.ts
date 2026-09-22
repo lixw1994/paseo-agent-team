@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { TeamService, memberPrompt, type Runtime } from "./team-service";
 import { readState, saveState } from "./storage";
-import type { Member, StartInput } from "../shared/team";
+import type { StartInput } from "../shared/team";
 import { memberRoleTitle, roles } from "../shared/team";
 
 async function fixture() {
@@ -24,7 +24,7 @@ async function fixture() {
     async send(id, prompt) { calls.push(`send:${id}:${prompt}`); },
     async archive(id) { calls.push(`archive:${id}`); agents.get(id)!.status = "archived"; },
   };
-  const input: StartInput = { requestId: randomUUID(), workspaceId: "origin", role: "researcher", task: "Research the latest official API documentation", choiceId: "profile:test", isolation: "shared" };
+  const input: StartInput = { requestId: randomUUID(), workspaceId: "origin", role: "researcher", choiceId: "profile:test", isolation: "shared" };
   return { root, runtime, input, calls, records, service: new TeamService(runtime), cleanup: () => rm(root, { recursive: true, force: true }) };
 }
 
@@ -66,12 +66,39 @@ test("worker enforces worktree isolation before creating a member", async () => 
   } finally { await f.cleanup(); }
 });
 
+test("members wait for explicit assignments and retain their role on reload", async () => {
+  const f = await fixture();
+  try {
+    f.runtime.inspect = async () => ({ status: "idle", output: "" });
+    await f.service.start(f.input);
+    const custom = await f.service.start({ ...f.input, requestId: randomUUID(), role: "custom", customRole: { name: "QA", instructions: "Report reproducible defects." } });
+    assert.deepEqual(f.calls, ["create", "create"]);
+    const state = await readState(f.root);
+    assert.ok(state.members.every(member => !Object.hasOwn(member, "task")));
+    assert.ok((await f.service.view("origin")).members.every(member => member.status === "idle" && !member.output));
+    await f.service.followup("origin", custom.requestId, "Check keyboard navigation in the checkout dialog.");
+    assert.deepEqual(f.calls.slice(2), [`send:${custom.agentId}:Check keyboard navigation in the checkout dialog.`]);
+    const restored = await new TeamService(f.runtime).view("origin");
+    assert.deepEqual(restored.members[1].customRole, custom.customRole);
+    assert.equal(f.calls.length, 3, "Reload must not create an agent or send work");
+  } finally { await f.cleanup(); }
+});
+
+test("creation validates unexpected fields before any side effect", async () => {
+  const f = await fixture();
+  try {
+    await assert.rejects(f.service.start({ ...f.input, unexpected: true } as StartInput), /Unrecognized key/);
+    assert.deepEqual(f.calls, []);
+    await assert.rejects(readFile(join(f.root, ".paseo-agent-team/state.json")), { code: "ENOENT" });
+  } finally { await f.cleanup(); }
+});
+
 test("restored helper prompts preserve lead ownership and distinct write scopes", async () => {
   const f = await fixture();
   try {
     const researcher = await f.service.start(f.input);
-    const writer = await f.service.start({ ...f.input, requestId: randomUUID(), role: "writer", task: "Update docs/usage.md only" });
-    const worker = await f.service.start({ ...f.input, requestId: randomUUID(), role: "worker", isolation: "worktree", task: "Rename the specified local variable" });
+    const writer = await f.service.start({ ...f.input, requestId: randomUUID(), role: "writer" });
+    const worker = await f.service.start({ ...f.input, requestId: randomUUID(), role: "worker", isolation: "worktree" });
     assert.deepEqual(Object.keys(roles), ["researcher", "writer", "worker"]);
     assert.equal(writer.workspaceId, "origin");
     assert.equal(worker.workspaceId, "isolated");
@@ -88,33 +115,50 @@ test("restored helper prompts preserve lead ownership and distinct write scopes"
       assert.match(prompt, /existing primary agent is the Tech Lead/);
       assert.match(prompt, /all openspec\/ and adr\/ edits belong to the Tech Lead/);
       assert.match(prompt, /Do not launch further agents\./);
-      assert.ok(prompt.endsWith(member.task));
+      assert.match(prompt, /Wait for an explicit user assignment/);
     }
   } finally { await f.cleanup(); }
 });
 
-test("legacy roles cannot start new agents, but saved members keep identity and management", async () => {
+test("custom members retain identity through lost replies, reload, follow-up, and archive", async () => {
   const f = await fixture();
   try {
-    for (const role of ["reviewer", "implementer", "tech-lead"]) {
-      await assert.rejects(f.service.start({ ...f.input, role } as unknown as StartInput));
-    }
-    assert.deepEqual(f.calls, []);
-    const first = await f.service.start(f.input);
-    const second = await f.service.start({ ...f.input, requestId: randomUUID(), role: "worker", isolation: "worktree" });
-    const original: Member[] = [{ ...first, role: "reviewer" }, { ...second, role: "implementer" }];
-    await saveState(f.root, { version: 1, members: original });
-    const view = await new TeamService(f.runtime).view("origin");
-    assert.deepEqual(view.members.map(m => [m.requestId, m.agentId, m.role, m.task, m.config]), original.map(m => [m.requestId, m.agentId, m.role, m.task, m.config]));
-    assert.equal(memberRoleTitle(view.members[0].role), "Reviewer (legacy)");
-    assert.equal(memberRoleTitle(view.members[1].role), "Implementer (legacy)");
-    await f.service.followup("origin", first.requestId, "Clarify the existing task");
-    const archived = await f.service.archive("origin", second.requestId);
-    assert.equal(archived.role, "implementer");
+    const input: StartInput = { ...f.input, role: "custom", customRole: { name: "  Accessibility reviewer  ", instructions: "  Review keyboard access without editing files.  " } };
+    const create = f.runtime.create;
+    f.runtime.create = async (...args) => { await create(...args); throw new Error("reply lost"); };
+    assert.equal((await f.service.start(input)).status, "unresolved");
+    const recovered = await new TeamService(f.runtime).start(input);
+    assert.equal(f.calls.filter(call => call === "create").length, 1);
+    assert.deepEqual(recovered.customRole, { name: "Accessibility reviewer", instructions: "Review keyboard access without editing files." });
+    const prompt = memberPrompt(recovered);
+    assert.match(prompt, /Standing role responsibilities:\nReview keyboard access without editing files\./);
+    assert.match(prompt, /Do not launch further agents/);
+    assert.equal(memberRoleTitle(recovered.role, recovered.customRole?.name), "Accessibility reviewer");
+    await f.service.followup("origin", input.requestId, "Check focus restoration too.");
+    const archived = await f.service.archive("origin", input.requestId);
     assert.equal(archived.status, "archived");
-    assert.equal(archived.output, "Research result");
-    assert.equal(f.calls.filter(call => call === "create").length, 2);
-    assert.equal((await readState(f.root)).members[0].role, "reviewer");
+    assert.deepEqual((await readState(f.root)).members[0].customRole, recovered.customRole);
+    f.runtime.create = create;
+    const blank = await f.service.start({ ...input, requestId: randomUUID(), customRole: { name: "Test helper" }, isolation: "worktree" });
+    assert.equal(blank.workspaceId, "isolated");
+    assert.ok(!memberPrompt(blank).includes("Standing role responsibilities:"));
+    assert.match(memberPrompt(blank), /existing primary agent is the Tech Lead/);
+  } finally { await f.cleanup(); }
+});
+
+test("custom definitions are validated before creation and cannot override presets", async () => {
+  const f = await fixture();
+  try {
+    const invalid = [
+      { role: "custom" }, { role: "custom", customRole: { name: "  " } },
+      { role: "custom", customRole: { name: "x".repeat(81) } },
+      { role: "custom", customRole: { name: "two\nlines" } },
+      { role: "custom", customRole: { name: "QA", instructions: "x".repeat(8001) } },
+      { role: "writer", customRole: { name: "Unrestricted writer" } },
+    ];
+    for (const value of invalid) await assert.rejects(f.service.start({ ...f.input, ...value } as StartInput));
+    assert.deepEqual(f.calls, []);
+    await assert.rejects(readFile(join(f.root, ".paseo-agent-team/state.json")), { code: "ENOENT" });
   } finally { await f.cleanup(); }
 });
 

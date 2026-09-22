@@ -17,7 +17,7 @@ set -euo pipefail
 
 MARKER_BEGIN="<!-- paseo-agent-team:begin -->"
 MARKER_END="<!-- paseo-agent-team:end -->"
-DEFAULT_REPO="${PASEO_AGENT_TEAM_REPO:-${COPILOT_WORKFLOW_REPO:-https://github.com/lixw1994/paseo-agent-team}}"
+DEFAULT_REPO="${PASEO_AGENT_TEAM_REPO:-https://github.com/lixw1994/paseo-agent-team}"
 ALL_COMPONENTS="openspec adr skills hooks"
 DEFAULT_COMPONENTS="openspec adr skills hooks"
 MANIFEST=".paseo-agent-team.yaml"
@@ -120,26 +120,17 @@ merge_agents_md() {
     log "Created AGENTS.md (managed marker block)"
     return
   fi
-  local b e legacy_b legacy_e begin="$MARKER_BEGIN" end="$MARKER_END"
-  legacy_b="$(grep -cF '<!-- copilot-workflow:begin -->' "$target_md" || true)"
-  legacy_e="$(grep -cF '<!-- copilot-workflow:end -->' "$target_md" || true)"
+  local b e
   b="$(grep -cF "$MARKER_BEGIN" "$target_md" || true)"
   e="$(grep -cF "$MARKER_END" "$target_md" || true)"
-  if [ "$legacy_b" != "0" ] || [ "$legacy_e" != "0" ]; then
-    [ "$b" = "0" ] && [ "$e" = "0" ] && [ "$legacy_b" = "1" ] && [ "$legacy_e" = "1" ] \
-      || { rm -f "$tmp"; die "Mixed or unpaired managed AGENTS.md markers; repair manually and rerun"; }
-    begin="<!-- copilot-workflow:begin -->"
-    end="<!-- copilot-workflow:end -->"
-    b=1; e=1
-  fi
   if [ "$b" = "0" ] && [ "$e" = "0" ]; then
     { cat "$target_md"; echo; echo "$MARKER_BEGIN"; cat "$block_src"; echo "$MARKER_END"; } > "$tmp"
     mv "$tmp" "$target_md"
     log "Appended managed marker block to existing AGENTS.md (original content untouched)"
   elif [ "$b" = "1" ] && [ "$e" = "1" ]; then
-    awk -v begin="$begin" -v end="$end" -v new_begin="$MARKER_BEGIN" -v new_end="$MARKER_END" -v src="$block_src" '
-      $0 == begin { if (seen || skip) exit 1; seen=1; print new_begin; while ((getline line < src) > 0) print line; close(src); skip=1; next }
-      $0 == end   { if (!skip) exit 1; skip=0; closed=1; print new_end; next }
+    awk -v begin="$MARKER_BEGIN" -v end="$MARKER_END" -v src="$block_src" '
+      $0 == begin { if (seen || skip) exit 1; seen=1; print begin; while ((getline line < src) > 0) print line; close(src); skip=1; next }
+      $0 == end   { if (!skip) exit 1; skip=0; closed=1; print end; next }
       !skip { print }
       END { if (!seen || !closed || skip) exit 1 }
     ' "$target_md" > "$tmp" || { rm -f "$tmp"; die "Invalid managed AGENTS.md marker order"; }
@@ -220,9 +211,16 @@ install_skills() {
 }
 
 install_hooks() {
-  if [ ! -d "$TARGET/.git" ]; then
+  if ! git -C "$TARGET" rev-parse --show-toplevel >/dev/null 2>&1; then
     warn "Component hooks skipped: current directory is not a git repository"
     note_skip "hooks (pre-commit discipline hook)" "run git init, then rerun this script"
+    return
+  fi
+  local project_root
+  project_root="$(git -C "$TARGET" rev-parse --show-toplevel)"
+  if [ "$(cd "$project_root" && pwd -P)" != "$(cd "$TARGET" && pwd -P)" ]; then
+    warn "Component hooks skipped: run the installer from the Git project root"
+    note_skip "hooks (target is a project subdirectory)" "rerun the installer from ${project_root}"
     return
   fi
   # Hook logic is versioned with the project (works on collaborators' machines
@@ -231,8 +229,11 @@ install_hooks() {
   [ "$SRC" = "$TARGET" ] || cp "$SRC/scripts/pre-commit.sh" "$TARGET/scripts/pre-commit.sh"
   chmod +x "$TARGET/scripts/pre-commit.sh"
 
-  local hook="$TARGET/.git/hooks/pre-commit"
-  if [ -f "$hook" ] && ! grep -Eq '(paseo-agent-team|copilot-workflow) hook shim' "$hook"; then
+  local hook_dir hook
+  hook_dir="$(git -C "$TARGET" rev-parse --path-format=absolute --git-path hooks)"
+  mkdir -p "$hook_dir"
+  hook="$hook_dir/pre-commit"
+  if [ -f "$hook" ] && ! grep -qF 'paseo-agent-team hook shim' "$hook"; then
     local backup="$hook.backup.$(date +%Y%m%d%H%M%S)"
     mv "$hook" "$backup"
     chmod +x "$backup" 2>/dev/null || true
@@ -243,12 +244,15 @@ install_hooks() {
 # paseo-agent-team hook shim (managed file, do not edit; logic lives in scripts/pre-commit.sh)
 set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
-for prev in "$repo_root"/.git/hooks/pre-commit.backup.*; do
-  if [ -x "$prev" ] && ! grep -Eq '(paseo-agent-team|copilot-workflow) hook shim' "$prev"; then
+hook_dir="$(git rev-parse --path-format=absolute --git-path hooks)"
+for prev in "$hook_dir"/pre-commit.backup.*; do
+  if [ -x "$prev" ] && ! grep -qF 'paseo-agent-team hook shim' "$prev"; then
     "$prev" "$@" || exit $?
   fi
 done
-exec "$repo_root/scripts/pre-commit.sh" "$@"
+if [ -x "$repo_root/scripts/pre-commit.sh" ]; then
+  exec "$repo_root/scripts/pre-commit.sh" "$@"
+fi
 HOOK
   chmod +x "$hook"
   mark_installed hooks
@@ -271,13 +275,10 @@ write_manifest() {
         openspec) echo "  - openspec/schemas/" ;;
         adr)      echo "  - adr/README.md" ;;
         skills)   for s in $SKILL_NAMES; do echo "  - .agents/skills/$s/"; done ;;
-        hooks)    echo "  - scripts/pre-commit.sh"; echo "  - .git/hooks/pre-commit" ;;
+        hooks)    echo "  - scripts/pre-commit.sh"; echo "  - $(git -C "$TARGET" rev-parse --git-path hooks)/pre-commit" ;;
       esac
     done
   } > "$TARGET/$MANIFEST"
-  if [ -f "$TARGET/.copilot-workflow.yaml" ] && grep -qx 'template: copilot-workflow' "$TARGET/.copilot-workflow.yaml"; then
-    rm "$TARGET/.copilot-workflow.yaml"
-  fi
   log "Manifest written to ${MANIFEST} (rerun this script to upgrade managed content)"
 }
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # paseo-agent-team discipline hook: validate OpenSpec artifacts and block
 # modification of accepted ADRs before every commit.
-# Called by the .git/hooks/pre-commit shim; logic is version-controlled with the
+# Called by Git's effective pre-commit shim; logic is version-controlled with the
 # repository, so upgrades need no hook reinstall.
 set -uo pipefail
 
-if [ "${PASEO_AGENT_TEAM_SKIP_HOOKS:-}" = "1" ] || [ "${COPILOT_WORKFLOW_SKIP_HOOKS:-}" = "1" ]; then
-  echo "[paseo-agent-team] PASEO_AGENT_TEAM_SKIP_HOOKS=1 (or legacy alias), skipping discipline checks."
+if [ "${PASEO_AGENT_TEAM_SKIP_HOOKS:-}" = "1" ]; then
+  echo "[paseo-agent-team] PASEO_AGENT_TEAM_SKIP_HOOKS=1, skipping discipline checks."
   exit 0
 fi
 

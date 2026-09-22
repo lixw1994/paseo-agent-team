@@ -6,6 +6,14 @@ import { stateSchema, type TeamState } from "../shared/team";
 export const stateDirectory = ".paseo-agent-team";
 const empty = (): TeamState => ({ version: 1, members: [] });
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT";
+const projectLocks = new Map<string, Promise<unknown>>();
+export async function withProjectLock<T>(directory: string, action: (root: string) => Promise<T>): Promise<T> {
+  const root = await realpath(directory);
+  const previous = projectLocks.get(root) ?? Promise.resolve();
+  const pending = previous.catch(() => {}).then(() => action(root));
+  projectLocks.set(root, pending);
+  try { return await pending; } finally { if (projectLocks.get(root) === pending) projectLocks.delete(root); }
+}
 export async function rejectSymlink(path: string) {
   try { if ((await lstat(path)).isSymbolicLink()) throw new Error(`Refusing symbolic link: ${path}`); }
   catch (error) { if (!missing(error)) throw error; }
@@ -16,8 +24,8 @@ export async function readState(root: string): Promise<TeamState> {
   try { return stateSchema.parse(JSON.parse(await readFile(file, "utf8"))); }
   catch (error) { if (missing(error)) return empty(); throw new Error(`Cannot read team state: ${String(error)}`); }
 }
-export async function saveState(root: string, state: TeamState) {
-  const validated = stateSchema.parse(state), directory = join(root, stateDirectory);
+export async function prepareStateDirectory(root: string) {
+  const directory = join(root, stateDirectory);
   await rejectSymlink(directory); await mkdir(directory, { recursive: true });
   const ignore = join(root, ".gitignore"); await rejectSymlink(ignore);
   let text = "";
@@ -25,6 +33,10 @@ export async function saveState(root: string, state: TeamState) {
   if (!text.split(/\r?\n/).some(line => line === `${stateDirectory}/` || line === `/${stateDirectory}/`)) {
     await writeFile(ignore, text + (text && !text.endsWith("\n") ? "\n" : "") + `${stateDirectory}/\n`);
   }
+  return directory;
+}
+export async function saveState(root: string, state: TeamState) {
+  const validated = stateSchema.parse(state), directory = await prepareStateDirectory(root);
   const target = join(directory, "state.json"); await rejectSymlink(target);
   const temp = join(directory, `${randomUUID()}.tmp`);
   await writeFile(temp, JSON.stringify(validated, null, 2) + "\n", { mode: 0o600 });

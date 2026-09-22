@@ -11,7 +11,10 @@
   "homepage": "https://github.com/lixw1994/paseo-agent-team#readme",
   "bugs": "https://github.com/lixw1994/paseo-agent-team/issues",
   "scripts": {
+    "prepare": "node scripts/bundle-workflow.mjs",
+    "pretypecheck": "node scripts/bundle-workflow.mjs",
     "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/bundle-workflow.mjs",
     "test": "node --import tsx --test server/*.test.ts"
   },
   "devDependencies": {

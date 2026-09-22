@@ -14,11 +14,15 @@ npm install -g @fission-ai/openspec@latest
 npm --prefix plugins/paseo-agent-team ci
 ```
 
+The plugin’s npm preparation generates `server/workflow-assets.json` from the root installer and declared assets; keep the complete repository checkout. Typechecking and tests regenerate it after installer changes. The generated file stays out of Git.
+
 The installer sets up the local discipline hook. It does not install the Paseo plugin or launch helpers.
 
 ## Scope a change
 
 Use the full [OpenSpec workflow](./docs/workflow.md) for new capabilities, public interface changes, dependencies, and architectural changes. Small fixes and documentation maintenance can proceed directly. Accepted ADRs are append-only; supersede a decision with a new record when necessary.
+
+The project is in development. Implement the current model directly; introduce backward compatibility or data migrations only for an explicit requirement.
 
 ## Update documentation with the change
 
