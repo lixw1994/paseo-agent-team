@@ -2,34 +2,43 @@
 
 English | [简体中文](./README.zh-CN.md)
 
-An OpenSpec engineering workflow you can use with any coding agent, plus an optional native Paseo plugin for agent teams. Work solo by default; start a helper only when you explicitly need one.
+An OpenSpec engineering workflow for any coding agent, with an optional native Paseo plugin for agent teams. Work solo by default and start helpers explicitly when you need them.
 
-| Mode | What you install | What you get |
-|------|------------------|--------------|
-| Standalone workflow | Run `init.sh` in your project | OpenSpec, ADR rules, general skills, and discipline hooks; no Paseo dependency |
-| Paseo enhancement | Install the Agent Team plugin on your Paseo host | Workspace panel, configured profiles, bounded member tasks, results, follow-ups, and archival |
+| Mode | Installation | Capabilities |
+|------|--------------|--------------|
+| Standalone workflow | Run `init.sh` in your project | OpenSpec, ADR rules, general skills, and discipline hooks |
+| Paseo enhancement | Install Agent Team on your Paseo host | Workspace panel, profile selection, bounded helper tasks, results, follow-ups, and archival |
 
 ## Install the engineering workflow
 
-From a local checkout, run the installer in the target project:
+You need Git, Bash, and the OpenSpec CLI. Run these commands in the target Git project:
 
 ```bash
-cd /path/to/your-project
-/path/to/paseo-agent-team/init.sh
+npm install -g @fission-ai/openspec@latest
+curl -fsSL https://raw.githubusercontent.com/lixw1994/paseo-agent-team/main/init.sh | bash
 ```
 
-Install the OpenSpec CLI first with `npm install -g @fission-ai/openspec@latest`. If it is missing, the installer skips that component and explains how to restore it. Git is required; missing optional components do not block the others.
+The default components are `openspec,adr,skills,hooks`. Installation creates the managed project instructions and workflow assets without installing Paseo or starting a team. Missing OpenSpec skips that component and prints a remediation command.
 
-The defaults are `openspec,adr,skills,hooks`. Use `--with adr,skills` for a subset, `--language "Simplified Chinese"` for artifact language, or `--tools` for OpenSpec tool targets. Every successful selection installs the managed `AGENTS.md` instructions.
+For a local checkout or custom options:
 
-Start an agent and describe a change. Large changes follow proposal → specs → design → ADR → tasks → implementation → archive. Small changes go directly into code. No team is started by installation.
+```bash
+git clone https://github.com/lixw1994/paseo-agent-team.git
+cd /path/to/your-project
+/path/to/paseo-agent-team/init.sh --with openspec,adr,skills,hooks
+```
+
+`--with` replaces the component list. `--language "Simplified Chinese"` sets the language for a new OpenSpec configuration; existing projects retain their context. `--tools agents` is the default tool integration.
+
+Describe a change to your coding agent. Significant changes follow proposal → specs → design → ADR → tasks → implementation → verification → archive. Small fixes and documentation edits can proceed directly.
 
 ## Add Agent Team in Paseo
 
-The plugin source is `plugins/paseo-agent-team/`. Install it once per daemon, then use it in any workspace:
+The plugin supports Paseo 0.8.x and requires Node.js and npm for local setup. Enable trusted plugins under **Settings → Plugins** on the target daemon, then install from a checkout:
 
 ```bash
-cd /path/to/paseo-agent-team/plugins/paseo-agent-team
+git clone https://github.com/lixw1994/paseo-agent-team.git
+cd paseo-agent-team/plugins/paseo-agent-team
 npm ci
 npm run typecheck
 npm test
@@ -37,54 +46,41 @@ paseo plugin install "$PWD"
 paseo plugin ls
 ```
 
-Enable plugins in **Settings → Plugins** on the intended host first. Plugins execute trusted code on that host. The plugin targets Paseo 0.8.x; both the daemon and connected client need compatible versions.
-
-In a workspace, open **Agent Team** from the Command Center, or submit `/agent-team`. The panel shows active OpenSpec task counts. To collaborate:
+The plugin should report `running`. Install it once per daemon and use it across workspaces. In the target workspace, choose **Open Agent Team** in the Command Center or submit `/agent-team`.
 
 1. Choose Researcher (external research), Writer (`docs/`), or Worker (simple chores).
-2. Choose a configured Paseo profile and read its notes. If no usable profiles exist, the panel discovers available models.
-3. Provide context, requirements, expected output, and acceptance criteria, then start the selected member. Worker requires a separate worktree; Researcher and Writer default to the current workspace within their role scopes.
-4. Open the member's conversation, or refresh the panel for status and collected output. Send follow-ups as needed.
-5. Review and integrate the result, then archive the member. Worktrees are retained for manual integration.
+2. Select a configured Paseo profile or an available model.
+3. Supply context, requirements, expected output, and acceptance criteria, then press **Start selected member**.
+4. Open the conversation or refresh the panel to inspect status and output. Send follow-ups as needed.
+5. Review and integrate the result, then archive the member. Its worktree remains available.
 
-Your existing primary agent remains Tech Lead, owning architecture, core code, OpenSpec/ADR, and final review. Researcher and Writer isolate bulky research/drafting context; use Worker sparingly and review its code line by line. See the [role responsibilities and configuration preferences](./docs/team-roles.md).
+Your existing primary agent is Tech Lead and owns architecture, core code, OpenSpec/ADR, and final review. Worker requires a separate worktree. Researcher and Writer can use the current workspace within their role scopes. Role prompts do not replace provider permission settings.
 
-Each explicit start creates one member; repeat to assemble the team you need. Members are grouped by this plugin's records and labels; the panel does not designate an existing conversation as their parent automatically. Role instructions do not replace provider permission settings.
+Opening the panel starts no members. Each explicit launch creates one member; the plugin does not automatically start a fixed team or attach members to an existing parent conversation.
 
-See the [Paseo guide](./docs/paseo-guide.md) for recovery, isolation, and local development.
-
-## Layout
+## Project layout
 
 ```text
 init.sh                         Standalone workflow installer
-AGENTS.md                       Engineering discipline and opt-in collaboration
-openspec/                       Current specs, change history, and schemas
-adr/                            Immutable architectural decision history
-docs/                           Setup, workflow, plugin, and architecture guides
-skills.txt                      General skill declarations
+AGENTS.md                       Engineering and collaboration rules
+openspec/                       Capability specs, changes, and schemas
+adr/                            Architecture decisions
+plugins/paseo-agent-team/        Native Paseo plugin
+  client/                       Theme-aware workspace panel
+  server/                       Member operations, SDK adapter, local state
+  shared/                       Contracts and role definitions
 scripts/                        Discipline hook and installer regressions
-plugins/paseo-agent-team/        Separately installed Paseo plugin
-  paseo-plugin.json             Plugin identity and compatibility
-  index.client.tsx              Panel and command registration
-  index.server.ts               Team RPC registration
-  client/                       Native, theme-aware UI
-  server/                       Team operations, SDK integration, local state
-  shared/                       Typed contracts and role definitions
+docs/                           Setup, workflow, roles, and architecture
 ```
 
-The plugin creates `.paseo-agent-team/` in the originating project only when starting a member, and adds it to `.gitignore`. It stores local task/agent associations and collected output. OpenSpec and ADRs remain the project's lasting sources of truth.
+The plugin creates ignored `.paseo-agent-team/` state in the originating project when starting a member. OpenSpec and ADRs remain the sources of truth for capabilities and architecture.
 
-## Upgrade and development
+## Documentation and contributions
 
-Rerun `init.sh` to refresh selected workflow assets. Legacy `copilot-workflow` managed blocks and hooks migrate without duplicating instructions or chaining a managed hook into itself. The new installer manifest is `.paseo-agent-team.yaml`; legacy environment aliases remain accepted. See [migration](./docs/getting-started.md#upgrade-an-existing-installation).
+[Getting started](./docs/getting-started.md) · [Paseo guide](./docs/paseo-guide.md) · [Team roles](./docs/team-roles.md) · [Architecture](./docs/architecture.md)
 
-```bash
-bash scripts/regression-test.sh
-npm --prefix plugins/paseo-agent-team run typecheck
-npm --prefix plugins/paseo-agent-team test
-openspec validate --all --strict
-```
+Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for setup and validation. Update affected guides and both README languages together with behavior changes.
 
-After plugin source changes, typecheck and run `paseo plugin reload paseo-agent-team`. Source creation and local validation do not publish or rename a remote repository. Use the local install path until the renamed repository is published.
+## License
 
-[Documentation](./docs/README.md) · [Architecture](./docs/architecture.md)
+[MIT](./LICENSE). Bundled schema assets retain their own license notices.

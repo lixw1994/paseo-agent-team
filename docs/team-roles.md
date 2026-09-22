@@ -49,7 +49,3 @@ The panel displays the user's role preferences as guidance; it does not apply mo
 Actual choices come from Paseo profiles or provider discovery. A matching model name alone does not apply the preferred reasoning setting. Configure that setting in a Paseo profile where supported, then select the profile. Unavailable preferences are not silently replaced.
 
 Researcher and Writer can use the current workspace or an explicitly selected worktree. Worker always uses a worktree; uncommitted inputs are not copied. Role write scopes are prompt instructions, not operating-system permission enforcement.
-
-## Earlier plugin records
-
-Existing Reviewer or Implementer records retain their original identity, task, configuration, and results. They display a legacy label and remain available for follow-up or archival. New creation does not offer those roles, and refresh never converts an existing agent into a different role.

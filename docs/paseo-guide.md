@@ -1,12 +1,12 @@
 # Use Paseo Agent Team
 
-Use the plugin to start and manage a small set of agents for explicitly requested work. You need the standalone workflow installed in the project, a compatible Paseo 0.8.x host/client, and a usable configured provider.
+Use the plugin to start and manage agents for explicitly requested work. You need a compatible Paseo 0.8.x host/client and a usable configured provider. Install the standalone workflow when you also want OpenSpec discipline in the project.
 
 ## Open the panel
 
 Install the plugin using [Getting Started](./getting-started.md), then open the target workspace. In the Command Center choose **Open Agent Team**, or submit `/agent-team`. The workspace panel also supports the Explorer location.
 
-The panel displays active OpenSpec change names and checked/total task counts. Opening it does not create agents or team state. Refresh team to reconcile with the daemon and collect recent assistant output. Open a member's conversation for its full live history and permission requests.
+The panel displays active OpenSpec change names and checked/total task counts when the project has them. Opening it does not create agents or team state. Refresh team to read current status and recent assistant output. Open a member's conversation for its full live history and permission requests.
 
 ## Start a member
 
@@ -47,15 +47,13 @@ Continue independent lead work while helpers run. The Tech Lead personally revie
 
 Enter a follow-up and select **Send follow-up**. Once the task and integration are complete, select **Archive member**. For a currently running member the button explicitly says **Stop and archive member**. Only the selected recorded agent is affected.
 
-## Recover after reload or interrupted creation
+## Refresh member state
 
 Task records live under `.paseo-agent-team/state.json` in the originating project. The plugin adds `.paseo-agent-team/` to `.gitignore` on the first state write. It does not put runtime membership in OpenSpec or ADRs.
 
-A recorded request ID is idempotent. If creation succeeds but the response is lost, refresh recovers the agent by its team labels. If no matching agent can be found, the member remains **unresolved**; retrying that same request does not launch a duplicate. Check Paseo before intentionally starting a replacement. If a worktree was created before failure, its recorded workspace ID remains available for inspection.
+A recorded request ID is idempotent. Refresh finds an existing agent by its saved ID or team labels. If it cannot identify a matching agent, the member remains **unresolved**; retrying the same request does not launch a duplicate. Inspect the member's conversation and workspace before starting a replacement.
 
-Corrupt or unsupported state fails visibly and is preserved. The plugin rejects symbolic links for runtime state and ignore files. Back up state before manual repair. Use only one installation of this plugin to manage a given project's state; cross-process locking and multiple-host team state are outside this version.
-
-Earlier Reviewer and Implementer records remain available with a legacy label. Refresh preserves their actual role, IDs, task, and configuration; follow-up and archival still work. These roles are no longer offered for new creation.
+Invalid or unsupported state produces an error and remains untouched. Use one plugin installation to manage a project's state; multiple hosts writing the same team state are unsupported.
 
 ## Develop and reload
 
@@ -70,4 +68,4 @@ paseo plugin logs paseo-agent-team
 
 Do not restart the daemon for source changes. Check desktop and compact layouts and switch themes after client changes. The UI uses native primitives and host theme colors.
 
-Typechecking and automated tests cover the Researcher / Writer / Worker interface contracts, team lifecycle, and legacy member compatibility. Paseo 0.8.0 installation, reload, and read-only RPC checks have also succeeded locally. Actual app visual inspection and real member launches remain untested.
+Follow [CONTRIBUTING.md](../CONTRIBUTING.md) for validation and documentation requirements.

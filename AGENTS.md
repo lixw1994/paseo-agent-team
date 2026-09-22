@@ -11,6 +11,7 @@ This project manages changes with OpenSpec. The default schema is `spec-driven-w
 - **Two sources of truth**: `openspec/specs/` records current system capabilities; `adr/` records current architecture decisions. Read both before designing. Accepted ADRs are immutable — supersede them with new ADRs (see `adr/README.md`).
 - **Visualize complex content**: when explaining complex structures, flows, or relationships — in docs, artifacts, or replies — prefer visualization (Mermaid diagrams, tables, directory trees) over long prose.
 - **Architecture document**: keep an up-to-date architecture overview at `docs/architecture.md` (create it if missing); update it whenever a structural change lands.
+- **Current documentation**: update affected guides and both README languages in the same change as user-facing behavior, setup, or requirement changes. Verify affected commands and links, remove obsolete instructions and temporary migration/reset notes, and document shipped behavior only. Follow `CONTRIBUTING.md` when present.
 
 ## Paseo Agent Team (optional)
 

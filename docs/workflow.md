@@ -1,138 +1,75 @@
-# Engineering Workflow
+# Engineering workflow
 
-This document explains the core engineering workflow specifications and architectural discipline of paseo-agent-team. It helps you assess change scope, execute the OpenSpec 5-artifact pipeline, and follow ADR immutability and pre-commit quality gates.
+Use OpenSpec to define significant changes and ADRs to preserve architectural reasoning. Any coding agent can follow this workflow without Paseo; your primary agent owns the implementation and project decisions.
 
-## Workflow-First Positioning
+## Choose the scope
 
-In paseo-agent-team, **the engineering workflow is the core capability**, versioned alongside project code. Any coding agent reading `AGENTS.md` at the repository root can execute and comply with this workflow, without requiring Paseo.
+| Change | Process |
+|--------|---------|
+| New capability, public interface or data model, dependency, or structural change | Full `spec-driven-with-adr` workflow |
+| Small bug fix, local refactor, or documentation maintenance | Direct implementation and relevant verification |
+| Exploratory spike | `minimalist` schema or a bounded experiment; complete the full design and ADR work before production adoption |
 
-## Change Classification Criteria
+Read `openspec/specs/` and the effective decisions in `adr/` before designing a change. Review [AGENTS.md](../AGENTS.md) for ownership and collaboration rules.
 
-Before writing code, the Tech Lead evaluates the scope and impact of the change:
+## Create the five artifacts
 
-### 1. Major Changes (OpenSpec Workflow Required)
-
-Changes matching any of the following criteria must follow the standardized OpenSpec workflow:
-- Adding or significantly modifying a system capability.
-- Changing public APIs, interface signatures, or core data models.
-- Introducing new external dependencies or technology stack components.
-- Cross-module coordination, service boundary adjustments, or architectural refactoring.
-
-### 2. Minor Changes (Direct Implementation)
-
-Lightweight changes that do not alter capability specifications or architecture may be implemented directly without the full workflow:
-- Fixing typos in documentation or comments.
-- Localized bug fixes that adhere to existing behavior specifications.
-- Internal refactoring that does not change external behavior or interfaces.
-
-## OpenSpec Standardized Pipeline (`spec-driven-with-adr`)
-
-The project defaults to the `spec-driven-with-adr` schema (configured in `openspec/config.yaml`).
-
-### 1. Five-Stage Gates
-
-A major change produces five artifacts in sequence:
-
+```mermaid
+flowchart LR
+    proposal[Proposal] --> specs[Delta specs]
+    specs --> design[Design]
+    design --> adr[ADR review]
+    adr --> tasks[Tasks]
+    tasks --> implement[Implement and verify]
+    implement --> archive[Sync specs and archive]
 ```
-proposal ──> specs ──> design ──> adr ──> tasks
-```
-
-| Step | Artifact File | Core Content and Gate Expectations |
-|------|---------------|-----------------------------------|
-| **1. proposal** | `openspec/changes/<change>/proposal.md` | Explains context, motivation, capabilities to add/modify, scope, and explicit non-goals. |
-| **2. specs** | `openspec/changes/<change>/specs/<cap>/spec.md` | Defines detailed requirement specifications for identified capabilities (using Requirements, Gherkin scenarios, or SHALL / MUST statements). |
-| **3. design** | `openspec/changes/<change>/design.md` | Technical design taking into account the proposal, specs, and currently in-force ADRs. |
-| **4. adr** | `openspec/changes/<change>/adr.md` | Change-level ADR review manifest. If the change introduces durable architectural decisions, creates a new ADR under `adr/`. |
-| **5. tasks** | `openspec/changes/<change>/tasks.md` | Actionable, verifiable implementation plan. Authored only after all preceding four artifacts are complete. |
-
-### 2. Change Lifecycle and Implementation Skills
-
-Drive the change lifecycle using workflow skills in `.agents/skills/`:
-
-1. **Create Change**: Use `openspec-new-change` to create the change directory and initial files.
-2. **Advance Artifacts**: Use `openspec-continue-change` to advance through proposal → specs → design → adr → tasks.
-3. **Apply Implementation**: Use `openspec-apply-change` to execute tasks defined in `tasks.md` and verify with tests.
-4. **Verify Compliance**: Use `openspec-verify-change` to confirm that the implementation matches specifications.
-5. **Archive Change**: Use `openspec-archive-change` to merge capability specifications into `openspec/specs/` and move the change to archive.
-
-Archive command example:
 
 ```bash
+openspec new change <change-name>
+openspec status --change <change-name>
+```
+
+The configured default is `spec-driven-with-adr`.
+
+| Artifact | Location under `openspec/changes/<change-name>/` | Purpose |
+|----------|-------------------------------------------------|---------|
+| Proposal | `proposal.md` | Problem, scope, capability changes, and non-goals |
+| Specs | `specs/<capability>/spec.md` | Requirements and observable scenarios |
+| Design | `design.md` | Technical approach based on current specs and ADRs |
+| ADR | `adr.md` | Decision review and references to new durable records in root `adr/` |
+| Tasks | `tasks.md` | Implementation steps and acceptance checks |
+
+Use the installed OpenSpec skills to create and advance artifacts, apply tasks, verify behavior, and archive completed work. The [Git discipline skill](../.agents/skills/openspec-git-discipline/SKILL.md) defines commit checkpoints: proposal artifacts reach `main` before implementation depends on them, and implementation reaches `main` before archive. Agents create commits and merges only when requested.
+
+## Implement, verify, and archive
+
+Complete the tasks and verify the stated scenarios. Update affected documentation in the same change; keep setup instructions and both README languages aligned with shipped behavior.
+
+```bash
+openspec validate --all --strict
 openspec archive <change-name>
 ```
 
-Example output:
+Archive synchronizes delta specs into `openspec/specs/` and moves completed artifacts to `openspec/changes/archive/`. Check the resulting specs and archive changes before committing them. General development checks are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-```text
-Archiving change '<change-name>'...
-  Merged specs into openspec/specs/
-  Archived change artifacts to openspec/archive/<change-name>/
-Change successfully archived.
-```
-
-## Exploratory Spike Mode (`minimalist`)
-
-When rapidly prototyping, testing feasibility, or experimenting, use the lightweight schema:
+## Explore with the minimalist schema
 
 ```bash
-openspec new <spike-name> --schema minimalist
+openspec new change <spike-name> --schema minimalist
 ```
 
-- **Streamlined Artifacts**: The `minimalist` schema consists only of `specs -> tasks`, accelerating the transition to coding.
-- **Spike Discipline**:
-  1. Spike code **must not be merged directly into production as finished code**.
-  2. Once the prototype validates the concept and is chosen for production implementation, return to the default `spec-driven-with-adr` schema to author design and ADR artifacts before implementing production code.
+This schema creates specs and tasks. A validated prototype still needs the full design and ADR process before it becomes a production implementation.
 
-## Architecture Decision Records (ADR) Immutability Discipline
+## Maintain architectural decisions
 
-The project maintains two persistent sources of truth:
-- `openspec/specs/`: Current system capability specifications.
-- `adr/`: Durable history of architectural decisions.
+Number ADRs as `adr/NNNN-kebab-title.md`. Each record includes status, date, context, decision, and consequences. See the [ADR rules](../adr/README.md) for the format.
 
-### 1. ADR Formatting and Naming
+Accepted ADRs are immutable. To replace a decision, add a new numbered record with status `accepted, supersedes ADR-NNNN` and a `Supersedes:` field; leave the old record unchanged. Derive effective decisions from those relationships.
 
-- **Path**: Target repository `adr/` directory.
-- **Naming Convention**: `NNNN-kebab-case-title.md` (for example, `adr/0001-single-tech-lead-team-model.md`).
-  - Four-digit sequential index, monotonically incrementing across the repository, never reused.
-- **Structure**: MADR-short format containing Title, Status and Date, Context, Decision, Consequences, and optional `Supersedes:` metadata.
+The primary agent owns all `openspec/` and `adr/` edits. Update the [architecture overview](./architecture.md) when structural changes land. Helpers return bounded deliverables for the primary agent to review.
 
-### 2. Immutability Principle
+## Local commit checks
 
-- **Accepted ADRs Are Immutable**: Once an ADR status is marked as `accepted`, its content, status, and date must never be edited, deleted, or renamed.
-- **Supersede Mechanism**:
-  - To revise or overturn an existing decision, create a new ADR with an incremented number (for example, `adr/0006-new-architecture.md`).
-  - Mark the new ADR status as: `accepted, supersedes ADR-NNNN`, and explicitly populate the `Supersedes: ADR-NNNN` metadata field.
-  - **Leave the old ADR file completely unchanged**. The active decision set is derived by traversing the `Supersedes:` chain and excluding superseded decisions.
+The installed `.git/hooks/pre-commit` shim chains existing user hooks and invokes versioned `scripts/pre-commit.sh`. It rejects edits to tracked numbered ADRs and runs `openspec validate --all --strict`. If the CLI is unavailable, it prints a notice and skips specification validation.
 
-### 3. Artifact Ownership
-
-The `openspec/` and `adr/` directories are the domain of the Tech Lead. **They must be authored exclusively by the Tech Lead**. Auxiliary roles (including Writer) must not edit these directories.
-
-## Pre-Commit Discipline Hook and Escape Hatches
-
-A pre-commit git hook ensures automated enforcement of specification integrity and ADR immutability.
-
-### 1. Hook Execution Logic
-
-- `.git/hooks/pre-commit` is a managed shim script installed by `init.sh`. It chains any existing pre-commit hooks before executing `scripts/pre-commit.sh` (which is versioned with the codebase).
-- The hook performs two checks:
-  1. **ADR Immutability Check**: Inspects staged changes via `git diff --cached`. Any modifications (M), deletions (D), or renames (R) to existing `adr/NNNN-*.md` files cause the commit to be rejected.
-  2. **OpenSpec Validation**: Runs `openspec validate --all --strict` to verify syntax and gate compliance across all specs and changes.
-
-### 2. Emergency Escape Hatches
-
-In emergency situations or hotfix rebases, you can bypass hook checks using either method:
-
-```bash
-# Method 1: Use the paseo-agent-team environment variable to skip discipline checks
-PASEO_AGENT_TEAM_SKIP_HOOKS=1 git commit -m "Emergency fix"
-
-# Method 2: Use native git flag to skip pre-commit hooks entirely
-git commit --no-verify -m "Emergency fix"
-```
-
-## Related Documentation
-
-- [Documentation Suite Index (README.md)](./README.md): Documentation catalog and quick reference.
-- [Getting Started (getting-started.md)](./getting-started.md): Installation and setup guide.
-- [Paseo Guide (paseo-guide.md)](./paseo-guide.md): Preferred on-demand collaboration.
+For explicitly authorized maintenance, `PASEO_AGENT_TEAM_SKIP_HOOKS=1` skips the managed discipline checks. Ordinary commits run the checks.

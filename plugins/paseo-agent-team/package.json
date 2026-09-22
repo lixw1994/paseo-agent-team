@@ -2,6 +2,14 @@
   "name": "paseo-agent-team",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lixw1994/paseo-agent-team.git",
+    "directory": "plugins/paseo-agent-team"
+  },
+  "homepage": "https://github.com/lixw1994/paseo-agent-team#readme",
+  "bugs": "https://github.com/lixw1994/paseo-agent-team/issues",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test server/*.test.ts"

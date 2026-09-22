@@ -31,7 +31,7 @@ flowchart TD
     worker --> review
 ```
 
-The plugin never spawns a Tech Lead. Researcher and Writer isolate bulky context, and Worker returns complex work to the lead. New creation accepts only these three helper roles. Existing Reviewer/Implementer records retain their original identity and management controls with a legacy label. See [Team roles](./team-roles.md) for responsibilities and configuration guidance.
+The plugin never spawns a Tech Lead. Researcher and Writer isolate bulky context, and Worker returns complex work to the lead. Creation accepts only these three helper roles. See [Team roles](./team-roles.md) for responsibilities and configuration guidance.
 
 ## Plugin boundaries
 
@@ -79,19 +79,19 @@ Worker requires a separate worktree. Writer writes only `docs/`; Researcher writ
 
 A plugin reload loses in-memory locks but preserves the state file. Concurrent plugin installations or multiple hosts writing the same state are unsupported. The panel refreshes explicitly rather than polling; live conversations are available through Paseo navigation.
 
-## Workflow installation and migration
+## Workflow installation
 
 The installer supports `openspec,adr,skills,hooks`. Source detection checks workflow files, independent of the plugin. Selected managed schemas and skills refresh idempotently; `openspec init` reruns to repair partial generation. General skills remain at root `skills.txt` plus schema manifests.
 
-Root instructions use `paseo-agent-team` marker blocks. Legacy `copilot-workflow` blocks migrate in place; user content stays outside the block. Mixed or malformed markers fail before replacement. Legacy managed hooks are recognized, so they are not recursively chain-called as user hooks. The current-run manifest is `.paseo-agent-team.yaml`; legacy environment aliases remain migration inputs.
+Root instructions use `paseo-agent-team` marker blocks; user content stays outside the block. Malformed markers fail before replacement. The installer recognizes its managed hook to avoid recursive chaining. The current-run manifest is `.paseo-agent-team.yaml`.
 
-The pre-commit shim invokes versioned hook logic and preserved user hook backups. The logic validates OpenSpec and rejects mutation of accepted numbered ADRs. `PASEO_AGENT_TEAM_SKIP_HOOKS=1` is the explicit maintenance bypass, with the old alias retained.
+The pre-commit shim invokes versioned hook logic and preserved user hooks. The logic validates OpenSpec and rejects mutation of accepted numbered ADRs. `PASEO_AGENT_TEAM_SKIP_HOOKS=1` is the explicit maintenance bypass.
 
 ## Persistent sources of truth
 
-`openspec/specs/` describes supported current capabilities. `adr/` records accepted architectural decisions. Team state is operational context and does not replace either. The baseline starts with four capability specs, five retroactive ADRs, and no active or archived changes.
+`openspec/specs/` describes supported current capabilities. `adr/` records accepted architectural decisions. Team state is operational context and does not replace either. Update current specs with behavior changes and supersede accepted decisions through new ADRs.
 
-| Baseline decision | Scope |
+| Decision | Scope |
 |-------------------|-------|
 | [ADR-0001](../adr/0001-independent-workflow-and-paseo-plugin.md) | Independent workflow and native plugin distributions |
 | [ADR-0002](../adr/0002-spec-driven-change-management.md) | OpenSpec pipeline, immutable ADRs, and discipline hooks |
@@ -101,4 +101,4 @@ The pre-commit shim invokes versioned hook logic and preserved user hook backups
 
 ## Verification
 
-Installer regressions cover default/subset installation, legacy migration, malformed markers, hook chaining, workflow-only source detection, and partial initialization recovery. Plugin tests cover no-action startup, concurrent duplicate starts, reload recovery, worktree isolation, uncertain creation, ownership, archived results, and state-file protection. Typechecking targets the actual 0.8.0 SDK; live installation and UI checks are reported separately.
+Installer regressions cover default/subset installation, managed upgrades, malformed markers, hook chaining, existing OpenSpec context, and partial initialization. Plugin tests cover no-action startup, duplicate starts, state reconciliation, worktree isolation, ownership, archived results, and state-file protection. Typechecking targets the declared 0.8.0 SDK. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the commands and runtime checks required before review.
